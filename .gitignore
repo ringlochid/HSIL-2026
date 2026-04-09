@@ -1,0 +1,25 @@
+# Local environment / editor
+.env
+.env.local
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+node_modules/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+.tmp/
+
+# Demo artifacts
+*.db
+*.sqlite
+
+# Notes that should stay local
+*.local.md
