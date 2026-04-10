@@ -86,7 +86,8 @@ class WorkflowService:
             patient_id=payload.patient_id,
             reports=reports,
             decision=decision,
-            evidence_lines=decision.evidence_lines,
+            evidence_map=evidence_map,
+            evidence_statuses=evidence_statuses,
         )
 
         run_response = self.run_repo.create_run(
@@ -144,22 +145,24 @@ class WorkflowService:
 
     def _extract_case_title(self, reports) -> str:
         titles = [
-            report.extracted_case.report_title
+            self._coerce_case(report).report_title
             for report in reports
-            if report.extracted_case.report_title
+            if self._coerce_case(report).report_title
         ]
         if titles:
             return titles[0]
         return "Genomic interpretation report"
 
+    def _coerce_case(self, report) -> ExtractedCase:
+        extracted = report.extracted_case
+        if isinstance(extracted, ExtractedCase):
+            return extracted
+        return ExtractedCase.model_validate(extracted)
+
     def _collect_variants(self, reports) -> list[VariantSummaryRow]:
         rows: list[VariantSummaryRow] = []
         for report in reports:
-            extracted = (
-                report.extracted_case
-                if isinstance(report.extracted_case, ExtractedCase)
-                else ExtractedCase.model_validate(report.extracted_case)
-            )
+            extracted = self._coerce_case(report)
             for variant in extracted.variants:
                 if isinstance(variant, ExtractedVariant):
                     rows.append(
@@ -181,34 +184,256 @@ class WorkflowService:
         return rows
 
     def _build_report_payload(
-        self, patient_id: str, reports, decision, evidence_lines: list[str]
+        self,
+        patient_id: str,
+        reports,
+        decision,
+        evidence_map: dict[str, dict],
+        evidence_statuses: dict[str, str],
     ) -> ReportPayload:
-        phenotype_sections = [
-            report.extracted_case.summary
-            for report in reports
-            if getattr(report.extracted_case, "summary", "").strip()
-        ]
-        clinical_phenotype = "\n\n".join(phenotype_sections).strip() or None
-
         variant_rows = self._collect_variants(reports)
-
-        acmg_lines = []
-        for item in evidence_lines[:3]:
-            if item:
-                acmg_lines.append(item)
-        acmg_classification = "; ".join(acmg_lines[:2]).strip() or None
-
-        expected_symptoms = "Progressive vision loss, night blindness, peripheral vision loss."
+        primary_case = self._coerce_case(reports[0]) if reports else None
+        clinical_phenotype = self._build_clinical_context(reports)
 
         return ReportPayload(
             patient_id=patient_id,
+            case_label=primary_case.case_label if primary_case else None,
+            report_title=primary_case.report_title if primary_case else None,
+            source_filenames=[report.filename for report in reports if getattr(report, "filename", None)],
             clinical_phenotype=clinical_phenotype,
-            ai_clinical_summary=decision.recommendation,
+            ai_clinical_summary=self._build_ai_clinical_summary(
+                variant_rows=variant_rows,
+                evidence_map=evidence_map,
+                decision=decision,
+            ),
             variant_summary_rows=variant_rows,
-            expanded_evidence="\n".join(evidence_lines),
-            acmg_classification=acmg_classification,
-            clinical_integration=decision.next_step,
-            expected_symptoms=expected_symptoms,
-            recommendations=decision.next_step,
+            expanded_evidence=self._build_evidence_categorisation(
+                evidence_map=evidence_map,
+                evidence_statuses=evidence_statuses,
+            ),
+            acmg_classification=self._build_classification_snapshot(evidence_map),
+            clinical_integration=self._build_clinical_integration(
+                clinical_phenotype=clinical_phenotype,
+                variant_rows=variant_rows,
+                evidence_map=evidence_map,
+            ),
+            expected_symptoms=self._build_expected_symptoms(
+                clinical_phenotype=clinical_phenotype,
+                variant_rows=variant_rows,
+            ),
+            recommendations=self._build_recommendations(clinical_phenotype=clinical_phenotype),
             limitations=decision.uncertainty,
         )
+
+    def _build_clinical_context(self, reports) -> str:
+        extracted_lines: list[str] = []
+        seen: set[str] = set()
+        keywords = (
+            "phenotype",
+            "history",
+            "symptom",
+            "referral",
+            "indication",
+            "presentation",
+            "vision",
+            "retinal",
+            "nyctalopia",
+            "night blindness",
+        )
+
+        for report in reports:
+            raw_text = (getattr(report, "raw_extracted_text", None) or "").splitlines()
+            for raw_line in raw_text:
+                line = " ".join(raw_line.split()).strip(" -•\t")
+                if not line:
+                    continue
+                lowered = line.lower()
+                if not any(keyword in lowered for keyword in keywords):
+                    continue
+                if line.lower().startswith("variant:"):
+                    continue
+                if line not in seen:
+                    extracted_lines.append(line)
+                    seen.add(line)
+
+        if extracted_lines:
+            return "\n".join(extracted_lines)
+
+        summaries = []
+        for report in reports:
+            summary = (self._coerce_case(report).summary or "").strip()
+            if not summary:
+                continue
+            lowered = summary.lower()
+            if any(keyword in lowered for keyword in keywords):
+                summaries.append(summary)
+
+        if summaries:
+            return "\n\n".join(summaries)
+
+        return (
+            "No explicit phenotype or referral history was extracted from the uploaded report. "
+            "Current context is limited to the reported genomic finding and still needs clinician correlation."
+        )
+
+    def _build_ai_clinical_summary(self, variant_rows, evidence_map: dict[str, dict], decision) -> str:
+        variant_label = self._variant_label(variant_rows)
+        clinvar = evidence_map.get("clinvar", {})
+        classification = clinvar.get("classification", "uncertain significance")
+        return (
+            f"The reported {variant_label} finding remains clinically review-required. "
+            f"Current external evidence is most consistent with {classification.lower()} rather than a final autonomous interpretation, "
+            "so the case should stay in clinician review rather than patient-facing release."
+        )
+
+    def _build_evidence_categorisation(
+        self,
+        evidence_map: dict[str, dict],
+        evidence_statuses: dict[str, str],
+    ) -> str:
+        clinvar = evidence_map.get("clinvar", {})
+        vep = evidence_map.get("vep", {})
+        spliceai = evidence_map.get("spliceai", {})
+        franklin = evidence_map.get("franklin", {})
+
+        splice_label, splice_score = self._format_spliceai_effect(spliceai)
+        franklin_bits = []
+        for label, value in (
+            ("functional", franklin.get("functional_data")),
+            ("population", franklin.get("population_data")),
+            ("in silico", franklin.get("in_silico_prediction")),
+        ):
+            if value:
+                franklin_bits.append(f"{label} {value}")
+
+        external_support = "; ".join(franklin_bits) if franklin_bits else "Unavailable"
+        if evidence_statuses.get("franklin") == "fallback":
+            external_support = f"{external_support} (Franklin fallback mode)"
+
+        return "\n".join(
+            [
+                (
+                    "Classification (ClinVar): "
+                    f"{clinvar.get('classification', 'Unavailable')} "
+                    f"({clinvar.get('review_status', 'review status unavailable')})."
+                ),
+                (
+                    "Protein consequence (Ensembl VEP): "
+                    f"{vep.get('most_severe_consequence', 'effect unavailable')} in "
+                    f"{vep.get('biotype', 'unknown biotype')} transcript."
+                ),
+                (
+                    "Splicing effect (SpliceAI): "
+                    f"{splice_label} (max delta {splice_score:.2f}; low >0.20, moderate >0.50, high >0.80; "
+                    f"AL {float(spliceai.get('acceptor_loss', 0.0) or 0.0):.2f}, "
+                    f"DL {float(spliceai.get('donor_loss', 0.0) or 0.0):.2f}, "
+                    f"AG {float(spliceai.get('acceptor_gain', 0.0) or 0.0):.2f}, "
+                    f"DG {float(spliceai.get('donor_gain', 0.0) or 0.0):.2f})."
+                ),
+                f"Population / external support (Franklin): {external_support}.",
+            ]
+        )
+
+    def _build_classification_snapshot(self, evidence_map: dict[str, dict]) -> str:
+        clinvar = evidence_map.get("clinvar", {})
+        vep = evidence_map.get("vep", {})
+        return (
+            f"Current external classification snapshot remains {clinvar.get('classification', 'unavailable').lower()}. "
+            f"The retrieved consequence is {vep.get('most_severe_consequence', 'effect unavailable')} in a "
+            f"{vep.get('biotype', 'unknown biotype')} transcript. "
+            "This section is a source-grounded snapshot, not a formal ACMG evidence-code assignment."
+        )
+
+    def _build_clinical_integration(
+        self,
+        clinical_phenotype: str | None,
+        variant_rows: list[VariantSummaryRow],
+        evidence_map: dict[str, dict],
+    ) -> str:
+        gene = variant_rows[0].gene if variant_rows else "reported gene"
+        phenotype_line = (clinical_phenotype or "").replace("\n", " ").strip()
+        phenotype_lower = phenotype_line.lower()
+        retinal_context = any(
+            token in phenotype_lower
+            for token in ("retinal", "nyctalopia", "night blindness", "vision loss")
+        )
+        if gene == "RPE65" and retinal_context:
+            phenotype_note = "The uploaded clinical context is phenotype-compatible with inherited retinal disease."
+        elif phenotype_line and not phenotype_line.startswith("No explicit phenotype"):
+            phenotype_note = "The uploaded report includes phenotype context that should be checked against the reported variant."
+        else:
+            phenotype_note = "Phenotype context was not cleanly extractable from the uploaded report, so correlation remains manual."
+
+        clinvar = evidence_map.get("clinvar", {})
+        classification = clinvar.get("classification", "uncertain significance").lower()
+        return (
+            f"{gene} is clinically relevant to this review. {phenotype_note} "
+            f"Current evidence remains aligned with {classification} rather than a stand-alone pathogenic conclusion, "
+            "so clinician correlation is still required before any final interpretation."
+        )
+
+    def _build_expected_symptoms(
+        self,
+        clinical_phenotype: str | None,
+        variant_rows: list[VariantSummaryRow],
+    ) -> str:
+        phenotype_lines = []
+        for raw_line in (clinical_phenotype or "").splitlines():
+            line = raw_line.strip()
+            lowered = line.lower()
+            if not line or line.startswith("No explicit phenotype"):
+                continue
+            if lowered.startswith("referral:") or lowered.startswith("history:"):
+                continue
+            if "phenotype" in lowered or any(
+                token in lowered for token in ("nyctalopia", "night blindness", "vision loss", "retinal")
+            ):
+                phenotype_lines.append(line)
+
+        if phenotype_lines:
+            return "\n".join(phenotype_lines)
+
+        genes = {row.gene for row in variant_rows if row.gene}
+        if "RPE65" in genes:
+            return "Progressive vision loss, night blindness, peripheral vision loss."
+        return "Gene-/disease-associated phenotype was not clearly extractable from the uploaded report."
+
+    def _build_recommendations(self, clinical_phenotype: str | None) -> str:
+        phenotype_present = bool(clinical_phenotype and not clinical_phenotype.startswith("No explicit phenotype"))
+        first_step = (
+            "Correlate the reported variant with the extracted phenotype/history from the uploaded report."
+            if phenotype_present
+            else "Obtain or confirm phenotype/history details before final interpretation."
+        )
+        return "\n".join(
+            [
+                first_step,
+                "Confirm transcript-level fit, zygosity, and overall variant context.",
+                "Consider segregation testing or orthogonal confirmation if clinically indicated.",
+                "Keep patient-facing release gated on clinician review and sign-off.",
+            ]
+        )
+
+    def _variant_label(self, variant_rows: list[VariantSummaryRow]) -> str:
+        if not variant_rows:
+            return "reported variant"
+        first = variant_rows[0]
+        gene = first.gene or "reported gene"
+        protein = first.protein_change or first.transcript_hgvs or "reported variant"
+        return f"{gene} {protein}"
+
+    def _format_spliceai_effect(self, spliceai: dict[str, object]) -> tuple[str, float]:
+        scores = [
+            float(spliceai.get("acceptor_loss", 0.0) or 0.0),
+            float(spliceai.get("donor_loss", 0.0) or 0.0),
+            float(spliceai.get("acceptor_gain", 0.0) or 0.0),
+            float(spliceai.get("donor_gain", 0.0) or 0.0),
+        ]
+        max_score = max(scores) if scores else 0.0
+        if max_score > 0.80:
+            return "high predicted splice impact", max_score
+        if max_score > 0.50:
+            return "moderate predicted splice impact", max_score
+        if max_score > 0.20:
+            return "low predicted splice impact", max_score
+        return "minimal predicted splice impact", max_score

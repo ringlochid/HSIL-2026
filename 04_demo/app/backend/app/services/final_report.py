@@ -113,6 +113,21 @@ class FinalReportService:
             [as_paragraph('Field', table_header_style), as_paragraph('Value', table_header_style)],
             [as_paragraph('Patient ID', table_cell_style), as_paragraph(report_payload.patient_id, table_cell_style)],
         ]
+        if getattr(report_payload, 'case_label', None):
+            patient_rows.append(
+                [as_paragraph('Case Label', table_cell_style), as_paragraph(report_payload.case_label, table_cell_style)]
+            )
+        if getattr(report_payload, 'report_title', None):
+            patient_rows.append(
+                [as_paragraph('Report Title', table_cell_style), as_paragraph(report_payload.report_title, table_cell_style)]
+            )
+        if getattr(report_payload, 'source_filenames', None):
+            patient_rows.append(
+                [
+                    as_paragraph('Source File(s)', table_cell_style),
+                    as_paragraph(', '.join(report_payload.source_filenames), table_cell_style),
+                ]
+            )
         patient_table = Table(patient_rows, colWidths=[55 * mm, 115 * mm], repeatRows=1, splitByRow=1)
         patient_table.setStyle(
             TableStyle([
@@ -125,19 +140,19 @@ class FinalReportService:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ])
         )
-        story.append(Paragraph('1. Patient & Referral Context', heading_style))
+        story.append(Paragraph('1. Patient & Report Context', heading_style))
         story.append(patient_table)
         story.append(Spacer(1, 4 * mm))
 
         intro_sections = [
-            ('2. Clinical Phenotype (AI Extracted)', report_payload.clinical_phenotype),
+            ('2. Clinical Context (Extracted)', report_payload.clinical_phenotype),
             ('3. AI Clinical Summary', report_payload.ai_clinical_summary),
         ]
         detail_sections = [
-            ('5. Expanded Evidence', report_payload.expanded_evidence),
-            ('6. ACMG Classification', report_payload.acmg_classification),
+            ('5. Evidence Categorisation', report_payload.expanded_evidence),
+            ('6. Current Classification Snapshot', report_payload.acmg_classification),
             ('7. Clinical Integration', report_payload.clinical_integration),
-            ('8. Expected Symptoms', report_payload.expected_symptoms),
+            ('8. Gene-/Disease-Associated Phenotype', report_payload.expected_symptoms),
             ('9. Recommendations', report_payload.recommendations),
             ('10. Limitations', report_payload.limitations),
         ]
