@@ -43,7 +43,7 @@ class RunRecord(Base):
 
 
 def build_engine(database_url: str):
-    kwargs = {'future': True}
+    kwargs: dict[str, object] = {'future': True}
     if database_url.startswith('sqlite'):
         kwargs['connect_args'] = {'check_same_thread': False}
     return create_engine(database_url, **kwargs)

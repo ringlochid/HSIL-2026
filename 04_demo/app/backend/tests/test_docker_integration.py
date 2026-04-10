@@ -13,6 +13,7 @@ PDF_BYTES = b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'
 
 
 def test_docker_stack_upload_run_review_approve_preview_pdf() -> None:
+    assert BASE_URL is not None
     with httpx.Client(base_url=BASE_URL, timeout=30.0) as client:
         health = client.get('/healthz')
         assert health.status_code == 200

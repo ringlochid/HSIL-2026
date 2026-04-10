@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
-from app.schemas.report import ExtractedCase, ExtractionIssue, ReportKind, ReportUploadResponse, UploadedReport
+from app.schemas.report import ExtractedCase, ExtractionIssue, ExtractionStatus, ReportKind, ReportUploadResponse, UploadedReport
 
 
 class IntakeService:
@@ -62,7 +62,7 @@ class IntakeService:
         report_kind: ReportKind,
         report_text: str,
         pdf_warnings: list[str],
-    ) -> tuple[ExtractedCase, str, list[str]]:
+    ) -> tuple[ExtractedCase, ExtractionStatus, list[str]]:
         warnings = list(pdf_warnings)
         if self.extraction_chain is None:
             if report_kind == 'patient':

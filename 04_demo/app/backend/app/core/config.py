@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,7 +20,7 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = True
     api_prefix: str = '/api/v1'
-    allowed_origins_raw: str = Field('http://localhost:5173', alias='ALLOWED_ORIGINS')
+    allowed_origins_raw: str = 'http://localhost:5173'
     upload_dir: Path = Path('./data/uploads')
     final_report_dir: Path = Path('./data/final_reports')
     max_upload_mb: int = 20

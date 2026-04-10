@@ -6,6 +6,14 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class DraftPayload(BaseModel):
+    case_title: str
+    recommendation: str
+    evidence_summary: str
+    uncertainty: str
+    next_step: str
+
+
 class ClinicianReviewPayload(BaseModel):
     reviewer_name: str | None = None
     review_note: str

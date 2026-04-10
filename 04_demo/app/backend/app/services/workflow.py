@@ -145,7 +145,10 @@ class WorkflowService:
                     )
                 else:
                     payload = getattr(variant, 'model_dump', lambda: variant)()
-                    rows.append(VariantSummaryRow(**payload))
+                    if isinstance(payload, dict):
+                        rows.append(VariantSummaryRow.model_validate(payload))
+                    else:
+                        rows.append(VariantSummaryRow())
         return rows
 
     def _build_report_payload(self, patient_id: str, reports, decision, evidence_lines: list[str]) -> ReportPayload:
