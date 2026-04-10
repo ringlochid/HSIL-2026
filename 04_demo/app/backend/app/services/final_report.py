@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from fastapi import HTTPException, status
 from reportlab.lib import colors
@@ -62,19 +63,60 @@ class FinalReportService:
         styles = getSampleStyleSheet()
         title_style = styles['Title']
         heading_style = styles['Heading2']
-        body_style = styles['BodyText']
-        body_style.spaceAfter = 6
-        small_style = ParagraphStyle('SmallMuted', parent=styles['BodyText'], fontSize=9, textColor=colors.HexColor('#555555'))
+        body_style = ParagraphStyle(
+            'ReportBody',
+            parent=styles['BodyText'],
+            spaceAfter=6,
+            leading=14,
+            wordWrap='CJK',
+            splitLongWords=True,
+        )
+        table_header_style = ParagraphStyle(
+            'TableHeader',
+            parent=styles['BodyText'],
+            fontSize=9,
+            leading=11,
+            textColor=colors.black,
+            wordWrap='CJK',
+            splitLongWords=True,
+        )
+        table_cell_style = ParagraphStyle(
+            'TableCell',
+            parent=styles['BodyText'],
+            fontSize=9,
+            leading=11,
+            wordWrap='CJK',
+            splitLongWords=True,
+        )
+        small_style = ParagraphStyle(
+            'SmallMuted',
+            parent=styles['BodyText'],
+            fontSize=9,
+            textColor=colors.HexColor('#555555'),
+            wordWrap='CJK',
+            splitLongWords=True,
+        )
+
+        def as_paragraph(value: object, style: ParagraphStyle = body_style) -> Paragraph:
+            text = escape(str(value or '')).replace('\n', '<br/>')
+            return Paragraph(text, style)
 
         story = [Paragraph('AI-Assisted Genomic Report (Mock)', title_style), Spacer(1, 6 * mm)]
 
-        patient_rows = [['Field', 'Value'], ['Patient ID', report_payload.patient_id]]
-        patient_table = Table(patient_rows, colWidths=[55 * mm, 115 * mm])
+        patient_rows = [
+            [as_paragraph('Field', table_header_style), as_paragraph('Value', table_header_style)],
+            [as_paragraph('Patient ID', table_cell_style), as_paragraph(report_payload.patient_id, table_cell_style)],
+        ]
+        patient_table = Table(patient_rows, colWidths=[55 * mm, 115 * mm], repeatRows=1, splitByRow=1)
         patient_table.setStyle(
             TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9d9d9')),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ])
         )
         story.append(Paragraph('1. Patient & Referral Context', heading_style))
@@ -96,25 +138,34 @@ class FinalReportService:
             if not content:
                 continue
             story.append(Paragraph(heading, heading_style))
-            story.append(Paragraph(str(content), body_style))
+            story.append(as_paragraph(content, body_style))
             story.append(Spacer(1, 4 * mm))
 
         if report_payload.variant_summary_rows:
             story.append(Paragraph('4. Variant Summary', heading_style))
-            rows = [['Gene', 'Transcript HGVS', 'Protein Change', 'Consequence']]
+            rows = [[
+                as_paragraph('Gene', table_header_style),
+                as_paragraph('Transcript HGVS', table_header_style),
+                as_paragraph('Protein Change', table_header_style),
+                as_paragraph('Consequence', table_header_style),
+            ]]
             for item in report_payload.variant_summary_rows:
                 rows.append([
-                    item.gene or 'N/A',
-                    item.transcript_hgvs or 'N/A',
-                    item.protein_change or 'N/A',
-                    item.consequence or item.variation_type or 'N/A',
+                    as_paragraph(item.gene or 'N/A', table_cell_style),
+                    as_paragraph(item.transcript_hgvs or 'N/A', table_cell_style),
+                    as_paragraph(item.protein_change or 'N/A', table_cell_style),
+                    as_paragraph(item.consequence or item.variation_type or 'N/A', table_cell_style),
                 ])
-            variant_table = Table(rows, colWidths=[35 * mm, 45 * mm, 40 * mm, 55 * mm])
+            variant_table = Table(rows, colWidths=[28 * mm, 54 * mm, 34 * mm, 59 * mm], repeatRows=1, splitByRow=1)
             variant_table.setStyle(
                 TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9d9d9')),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ])
             )
             story.append(variant_table)
@@ -124,10 +175,10 @@ class FinalReportService:
             note = (review_note or '').strip()
             if note:
                 story.append(Paragraph('11. Clinician Review Note', heading_style))
-                story.append(Paragraph(note, body_style))
+                story.append(as_paragraph(note, body_style))
                 story.append(Spacer(1, 4 * mm))
 
-        story.append(Paragraph('Generated for demo use only. Patient-facing release requires human clinical governance.', small_style))
+        story.append(as_paragraph('Generated for demo use only. Patient-facing release requires human clinical governance.', small_style))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm)

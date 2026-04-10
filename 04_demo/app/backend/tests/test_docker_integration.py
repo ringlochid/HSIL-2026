@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import os
+from io import BytesIO
 
 import httpx
 import pytest
+from reportlab.pdfgen import canvas
 
 BASE_URL = os.getenv('HSIL_DOCKER_BASE_URL')
 pytestmark = pytest.mark.skipif(not BASE_URL, reason='Set HSIL_DOCKER_BASE_URL after docker compose up.')
 
 
-PDF_BYTES = b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'
+def build_pdf_bytes() -> bytes:
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer)
+    pdf.drawString(72, 720, 'HSIL demo upload fixture')
+    pdf.drawString(72, 700, 'RPE65 c.260A>G / p.Asp87Gly')
+    pdf.drawString(72, 680, 'Retinal dystrophy review case')
+    pdf.save()
+    return buffer.getvalue()
+
+
+PDF_BYTES = build_pdf_bytes()
 
 
 def test_docker_stack_upload_run_review_approve_preview_pdf() -> None:
