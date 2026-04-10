@@ -9,3 +9,13 @@ from .run import (
     ReviewStatus,
     VariantSummaryRow,
 )
+from .search import (
+    SearchAnswerDraft,
+    SearchAnswerRequest,
+    SearchAnswerResponse,
+    SearchCitation,
+    SearchDocumentWrite,
+    SearchHit,
+    SearchResponse,
+    SearchVariantWrite,
+)

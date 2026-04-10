@@ -6,10 +6,11 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from app.agents.prompts import draft_prompt, extraction_prompt
+from app.agents.prompts import draft_prompt, extraction_prompt, search_answer_prompt
 from app.core.config import Settings
 from app.schemas.draft import DraftPayload
 from app.schemas.report import ExtractedCase
+from app.schemas.search import SearchAnswerDraft
 
 
 class MockExtractionChain:
@@ -83,3 +84,30 @@ def build_draft_chain(settings: Settings):
             return dict(result)
 
     return LiveDraftChain()
+
+
+def build_search_answer_chain(settings: Settings):
+    model = build_tool_enabled_llm(settings)
+    if model is None:
+        return None
+
+    class LiveSearchAnswerChain:
+        def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+            from langchain_core.prompts import ChatPromptTemplate
+
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", search_answer_prompt()),
+                    (
+                        "human",
+                        "User query:\n{query}\n\nRetrieved results (JSON):\n{results_context}\n\nInstructions:\n- answer only from these results\n- cite exact run_id/report_id values from the JSON\n- if results are ambiguous or weak, say so and keep grounded false\n- do not add outside facts",
+                    ),
+                ]
+            )
+            chain = prompt | model.with_structured_output(SearchAnswerDraft)
+            result = chain.invoke(payload)
+            if isinstance(result, SearchAnswerDraft):
+                return result.model_dump(mode="json")
+            return dict(result)
+
+    return LiveSearchAnswerChain()

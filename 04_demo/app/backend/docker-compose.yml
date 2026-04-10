@@ -18,9 +18,15 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://hsil:hsil@db:5432/hsil_demo
-      LLM_PROVIDER: mock
-      USE_REAL_APIS: "false"
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://hsil:hsil@db:5432/hsil_demo}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      USE_REAL_APIS: ${USE_REAL_APIS:-false}
+      FRANKLIN_API_TOKEN: ${FRANKLIN_API_TOKEN:-}
+      SEARCH_DEFAULT_LIMIT: ${SEARCH_DEFAULT_LIMIT:-10}
+      SEARCH_ANSWER_ENABLED: ${SEARCH_ANSWER_ENABLED:-false}
+      SEARCH_ANSWER_TOP_K: ${SEARCH_ANSWER_TOP_K:-5}
     depends_on:
       db:
         condition: service_healthy

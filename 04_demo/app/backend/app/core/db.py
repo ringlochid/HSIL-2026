@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, String, create_engine, text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, create_engine, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -46,6 +46,105 @@ class RunRecord(Base):
     )
 
 
+class SearchDocumentRecord(Base):
+    __tablename__ = "search_documents"
+
+    doc_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_key: Mapped[str] = mapped_column(String(96), unique=True, index=True)
+    doc_type: Mapped[str] = mapped_column(String(16), index=True)
+    run_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    report_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    patient_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    report_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    extraction_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    run_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    review_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    case_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    report_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    summary_text: Mapped[str] = mapped_column(Text, default="")
+    evidence_text: Mapped[str] = mapped_column(Text, default="")
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    raw_extracted_text: Mapped[str] = mapped_column(Text, default="")
+    identifier_text: Mapped[str] = mapped_column(Text, default="")
+    search_text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+
+class SearchVariantRecord(Base):
+    __tablename__ = "search_variants"
+
+    variant_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("search_documents.doc_id", ondelete="CASCADE"), index=True
+    )
+    gene_symbol: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gene_symbol_norm: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    transcript_hgvs: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transcript_hgvs_norm: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    protein_change: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    protein_change_norm: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    consequence: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+def _build_search_documents_fts_expression(search_documents_table):
+    simple_cfg = text("'simple'")
+    english_cfg = text("'english'")
+    weight_a = text("'A'")
+    weight_b = text("'B'")
+    weight_c = text("'C'")
+    weight_d = text("'D'")
+    expression = func.setweight(
+        func.to_tsvector(simple_cfg, func.coalesce(search_documents_table.c.identifier_text, "")),
+        weight_a,
+    )
+    expression = expression.op("||")(
+        func.setweight(
+            func.to_tsvector(english_cfg, func.coalesce(search_documents_table.c.summary_text, "")),
+            weight_b,
+        )
+    )
+    expression = expression.op("||")(
+        func.setweight(
+            func.to_tsvector(english_cfg, func.coalesce(search_documents_table.c.evidence_text, "")),
+            weight_c,
+        )
+    )
+    expression = expression.op("||")(
+        func.setweight(
+            func.to_tsvector(english_cfg, func.coalesce(search_documents_table.c.review_note, "")),
+            weight_c,
+        )
+    )
+    expression = expression.op("||")(
+        func.setweight(
+            func.to_tsvector(
+                english_cfg, func.coalesce(search_documents_table.c.raw_extracted_text, "")
+            ),
+            weight_d,
+        )
+    )
+    return expression
+
+
+def _ensure_postgres_search_indexes(engine) -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    search_documents = SearchDocumentRecord.__table__
+    fts_index = Index(
+        "ix_search_documents_search_text_fts",
+        _build_search_documents_fts_expression(search_documents),
+        postgresql_using="gin",
+    )
+    fts_index.create(bind=engine, checkfirst=True)
+
+
 def build_engine(database_url: str):
     kwargs: dict[str, object] = {"future": True}
     if database_url.startswith("sqlite"):
@@ -55,10 +154,15 @@ def build_engine(database_url: str):
 
 def build_session_factory(database_url: str):
     engine = build_engine(database_url)
-    Base.metadata.create_all(engine)
     return sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True
     )
+
+
+def initialize_database(session_factory) -> None:
+    engine = session_factory.kw["bind"]
+    Base.metadata.create_all(engine)
+    _ensure_postgres_search_indexes(engine)
 
 
 @contextmanager

@@ -16,9 +16,10 @@ from app.schemas.run import ReviewStatus, RunStatus
 
 
 class FinalReportService:
-    def __init__(self, settings, run_repo) -> None:
+    def __init__(self, settings, run_repo, search_index_service=None) -> None:
         self.settings = settings
         self.run_repo = run_repo
+        self.search_index_service = search_index_service
 
     def get_pdf(self, run_id: str) -> Path:
         run = self.run_repo.get_run(run_id)
@@ -51,13 +52,18 @@ class FinalReportService:
         approved_at = datetime.now().astimezone()
         self.run_repo.save_approved_pdf_path(run_id, str(approved_path))
         approved = self.run_repo.approve(run_id, approved_at)
+        if self.search_index_service is not None:
+            self.search_index_service.refresh_run(run_id)
         return approved
 
     def drop(self, run_id: str, review_note: str | None = None) -> DropResult:
         run = self.run_repo.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Run not found.')
-        return self.run_repo.drop(run_id, drop_note=review_note)
+        result = self.run_repo.drop(run_id, drop_note=review_note)
+        if self.search_index_service is not None:
+            self.search_index_service.refresh_run(run_id)
+        return result
 
     def _render_pdf(self, output_path: Path, report_payload, review_note: str | None = None) -> None:
         styles = getSampleStyleSheet()

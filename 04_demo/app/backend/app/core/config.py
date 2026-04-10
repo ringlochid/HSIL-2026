@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = True
+    search_default_limit: int = 10
+    search_answer_enabled: bool = False
+    search_answer_top_k: int = 5
     api_prefix: str = "/api/v1"
     allowed_origins_raw: str = "http://localhost:5173"
     upload_dir: Path = Path("./data/uploads")

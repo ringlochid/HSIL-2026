@@ -16,11 +16,19 @@ from app.schemas.report import (
 
 
 class IntakeService:
-    def __init__(self, settings, reports_repo, report_pdf_tool, extraction_chain) -> None:
+    def __init__(
+        self,
+        settings,
+        reports_repo,
+        report_pdf_tool,
+        extraction_chain,
+        search_index_service=None,
+    ) -> None:
         self.settings = settings
         self.reports_repo = reports_repo
         self.report_pdf_tool = report_pdf_tool
         self.extraction_chain = extraction_chain
+        self.search_index_service = search_index_service
 
     async def ingest_upload(
         self,
@@ -64,9 +72,12 @@ class IntakeService:
             source_pdf_path=str(file_path),
             extraction_status=extraction_status,
             extracted_case=extracted_case,
+            raw_extracted_text=pdf_result.get("text") or None,
             extraction_warnings=warnings,
         )
         self.reports_repo.save(report)
+        if self.search_index_service is not None:
+            self.search_index_service.index_report(report)
         return ReportUploadResponse(report=report)
 
     def _build_extracted_case(

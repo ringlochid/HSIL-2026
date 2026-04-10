@@ -8,8 +8,9 @@ from app.schemas.draft import ClinicianReviewPayload, ReviewResult
 
 
 class RecommendationService:
-    def __init__(self, run_repo) -> None:
+    def __init__(self, run_repo, search_index_service=None) -> None:
         self.run_repo = run_repo
+        self.search_index_service = search_index_service
 
     def apply_review(self, run_id: str, payload: ClinicianReviewPayload) -> ReviewResult:
         run = self.run_repo.get_run(run_id)
@@ -26,8 +27,11 @@ class RecommendationService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="review_note is required."
             )
 
-        return self.run_repo.add_review(
+        result = self.run_repo.add_review(
             run_id=run_id,
             review_note=note,
             reviewed_at=datetime.now(timezone.utc),
         )
+        if self.search_index_service is not None:
+            self.search_index_service.refresh_run(run_id)
+        return result

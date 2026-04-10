@@ -43,6 +43,7 @@ class UploadedReport(BaseModel):
     source_pdf_path: str
     extraction_status: ExtractionStatus
     extracted_case: ExtractedCase
+    raw_extracted_text: str | None = None
     extraction_warnings: list[str] = Field(default_factory=list)
 
 

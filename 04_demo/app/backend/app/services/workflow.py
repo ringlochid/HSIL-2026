@@ -17,11 +17,19 @@ from app.schemas.run import (
 
 
 class WorkflowService:
-    def __init__(self, reports_repo, run_repo, tool_registry, rule_engine) -> None:
+    def __init__(
+        self,
+        reports_repo,
+        run_repo,
+        tool_registry,
+        rule_engine,
+        search_index_service=None,
+    ) -> None:
         self.reports_repo = reports_repo
         self.run_repo = run_repo
         self.tool_registry = tool_registry
         self.rule_engine = rule_engine
+        self.search_index_service = search_index_service
 
     def create_run(self, payload: RunRequest) -> RunResponse:
         if not payload.report_ids:
@@ -91,7 +99,7 @@ class WorkflowService:
             warnings=warnings,
         )
 
-        return RunResponse(
+        response = RunResponse(
             run_id=run_response.run_id,
             patient_id=run_response.patient_id,
             report_ids=run_response.report_ids,
@@ -104,6 +112,9 @@ class WorkflowService:
             reviewed_at=None,
             approved_pdf_path=None,
         )
+        if self.search_index_service is not None:
+            self.search_index_service.index_run(response, reports)
+        return response
 
     def get_run(self, run_id: str) -> RunResponse:
         run = self.run_repo.get_run(run_id)
