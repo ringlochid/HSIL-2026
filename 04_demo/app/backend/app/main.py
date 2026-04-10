@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import build_api_router
 from app.core.config import ensure_runtime_dirs, get_settings
-from app.core.db import build_session_factory
+from app.core.db import build_session_factory, initialize_database
 from app.core.logging import configure_logging, get_logger
 from app.repos.reports_repo import ReportsRepo
 from app.repos.run_repo import RunRepo
@@ -31,6 +31,7 @@ def create_app(settings=None) -> FastAPI:
     ensure_runtime_dirs(settings)
     configure_logging(settings.debug)
     db_session_factory = build_session_factory(settings.database_url)
+    initialize_database(db_session_factory)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
