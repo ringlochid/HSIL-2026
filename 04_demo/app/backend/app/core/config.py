@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     franklin_base_url: str = "https://api.genoox.com"
     franklin_parse_base_url: str = "https://franklin.genoox.com"
     franklin_api_token: str | None = None
+    franklin_email: str | None = None
+    franklin_password: str | None = None
 
     @property
     def allowed_origins(self) -> list[str]:

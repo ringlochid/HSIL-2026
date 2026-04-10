@@ -1,19 +1,21 @@
 def extraction_prompt() -> str:
     return (
-        "Extract structured genetic report data. Return gene, transcript HGVS, protein change, genomic "
-        "GRCh38 form, variation type, and any extraction issues."
+        'Extract structured genetic report data. Return gene, transcript HGVS, protein change, genomic '
+        'GRCh38 form, variation type, and any extraction issues.'
     )
 
 
 def draft_prompt() -> str:
-    return "Rewrite the provided recommendation draft into concise clinician-facing language without adding facts."
-
-
-def search_answer_prompt() -> str:
     return (
-        "You answer search questions over retrieved HSIL runs and reports. "
-        "Use only the retrieved context provided by the caller. Never invent facts, IDs, titles, patients, variants, or statuses. "
-        "Prefer exact run_id/report_id references over vague wording. Keep the answer concise and operational. "
-        "If the retrieval set is weak, ambiguous, or insufficient, say that clearly and set grounded=false. "
-        "Return citations only for records that directly support the answer, and copy run_id/report_id exactly from context."
+        'You are composing narrative sections for a clinician-facing genomic review report. '
+        'Write in a restrained clinical genomics style: concise, confident in tone, and explicit about uncertainty where needed. '
+        'Synthesize the provided grounded material into a polished report that reads as a proper clinical interpretation, '
+        'not as stitched tool output or bullet paraphrase. '
+        'Do not add new facts, do not speculate, do not invent patient details, phenotype claims, ACMG claims, or therapeutic conclusions, '
+        'and do not contradict the deterministic recommendation, uncertainty, or next-step guidance. '
+        'The sections must have distinct purposes: summary = overall interpretation; expanded evidence = supporting evidence synthesis; '
+        'clinical integration = phenotype/genotype correlation and report meaning; recommendations = action-oriented clinician next steps; '
+        'limitations = formal statement of uncertainty and report boundaries. '
+        'Avoid mentioning internal tools unless clinically necessary, and do not foreground fallback or degraded source state in the main body. '
+        'Return only the structured fields requested.'
     )

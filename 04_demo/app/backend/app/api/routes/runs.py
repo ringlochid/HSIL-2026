@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 
-from app.schemas.draft import ApproveResult, ClinicianReviewPayload, DropResult, ReviewResult, RunDropPayload
+from app.schemas.draft import ApproveResult, ClinicianReviewPayload, DropResult, ReportDraftUpdatePayload, ReviewResult, RunDropPayload
 from app.schemas.run import RunRequest, RunResponse
 
 router = APIRouter(prefix='/api/v1', tags=['runs'])
@@ -22,6 +22,11 @@ def review_run(run_id: str, payload: ClinicianReviewPayload, request: Request) -
     return request.app.state.recommendation_service.apply_review(run_id, payload)
 
 
+@router.patch('/runs/{run_id}/report-payload', response_model=RunResponse)
+def update_run_report_payload(run_id: str, payload: ReportDraftUpdatePayload, request: Request) -> RunResponse:
+    return request.app.state.report_draft_service.update_report_payload(run_id, payload)
+
+
 @router.post('/runs/{run_id}/approve', response_model=ApproveResult)
 def approve_run(run_id: str, request: Request) -> ApproveResult:
     return request.app.state.final_report_service.approve(run_id)
@@ -32,7 +37,12 @@ def drop_run(run_id: str, payload: RunDropPayload, request: Request) -> DropResu
     return request.app.state.final_report_service.drop(run_id, review_note=(payload.review_note or None))
 
 
-@router.get('/runs/{run_id}/pdf')
+@router.api_route('/runs/{run_id}/pdf', methods=['GET', 'HEAD'])
 def get_run_pdf(run_id: str, request: Request) -> FileResponse:
     path = request.app.state.final_report_service.get_pdf(run_id)
-    return FileResponse(path=path, media_type='application/pdf', filename=path.name)
+    return FileResponse(
+        path=path,
+        media_type='application/pdf',
+        filename=path.name,
+        content_disposition_type='inline',
+    )

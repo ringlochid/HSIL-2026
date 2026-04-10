@@ -7,11 +7,11 @@ from pydantic import BaseModel
 
 
 class DraftPayload(BaseModel):
-    case_title: str
-    recommendation: str
-    evidence_summary: str
-    uncertainty: str
-    next_step: str
+    ai_clinical_summary: str
+    expanded_evidence: str
+    clinical_integration: str
+    recommendations: str
+    limitations: str
 
 
 class ClinicianReviewPayload(BaseModel):
@@ -20,6 +20,18 @@ class ClinicianReviewPayload(BaseModel):
 
 
 class RunDropPayload(BaseModel):
+    review_note: str | None = None
+
+
+class ReportDraftUpdatePayload(BaseModel):
+    clinical_phenotype: str | None = None
+    ai_clinical_summary: str | None = None
+    expanded_evidence: str | None = None
+    acmg_classification: str | None = None
+    clinical_integration: str | None = None
+    expected_symptoms: str | None = None
+    recommendations: str | None = None
+    limitations: str | None = None
     review_note: str | None = None
 
 

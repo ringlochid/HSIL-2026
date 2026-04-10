@@ -9,17 +9,16 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.schemas.draft import ApproveResult, DropResult
-from app.schemas.run import ReviewStatus, RunStatus
+from app.schemas.run import RunStatus, ReviewStatus
 
 
 class FinalReportService:
-    def __init__(self, settings, run_repo, search_index_service=None) -> None:
+    def __init__(self, settings, run_repo) -> None:
         self.settings = settings
         self.run_repo = run_repo
-        self.search_index_service = search_index_service
 
     def get_pdf(self, run_id: str) -> Path:
         run = self.run_repo.get_run(run_id)
@@ -52,23 +51,33 @@ class FinalReportService:
         approved_at = datetime.now().astimezone()
         self.run_repo.save_approved_pdf_path(run_id, str(approved_path))
         approved = self.run_repo.approve(run_id, approved_at)
-        if self.search_index_service is not None:
-            self.search_index_service.refresh_run(run_id)
         return approved
 
     def drop(self, run_id: str, review_note: str | None = None) -> DropResult:
         run = self.run_repo.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Run not found.')
-        result = self.run_repo.drop(run_id, drop_note=review_note)
-        if self.search_index_service is not None:
-            self.search_index_service.refresh_run(run_id)
-        return result
+        return self.run_repo.drop(run_id, drop_note=review_note)
 
     def _render_pdf(self, output_path: Path, report_payload, review_note: str | None = None) -> None:
         styles = getSampleStyleSheet()
-        title_style = styles['Title']
-        heading_style = styles['Heading2']
+        title_style = ParagraphStyle(
+            'ReportTitle',
+            parent=styles['Title'],
+            fontSize=20,
+            leading=24,
+            textColor=colors.HexColor('#1f2f38'),
+            spaceAfter=10,
+        )
+        heading_style = ParagraphStyle(
+            'ReportHeading',
+            parent=styles['Heading2'],
+            fontSize=13,
+            leading=16,
+            textColor=colors.HexColor('#1f2f38'),
+            spaceBefore=2,
+            spaceAfter=6,
+        )
         body_style = ParagraphStyle(
             'ReportBody',
             parent=styles['BodyText'],
@@ -99,6 +108,7 @@ class FinalReportService:
             parent=styles['BodyText'],
             fontSize=9,
             textColor=colors.HexColor('#555555'),
+            leading=11,
             wordWrap='CJK',
             splitLongWords=True,
         )
@@ -107,27 +117,23 @@ class FinalReportService:
             text = escape(str(value or '')).replace('\n', '<br/>')
             return Paragraph(text, style)
 
-        story = [Paragraph('AI-Assisted Genomic Report (Mock)', title_style), Spacer(1, 6 * mm)]
+        def add_section(story_items: list, heading: str, content: object, style: ParagraphStyle = body_style) -> None:
+            if not content:
+                return
+            story_items.append(
+                KeepTogether([
+                    Paragraph(heading, heading_style),
+                    as_paragraph(content, style),
+                    Spacer(1, 4 * mm),
+                ])
+            )
+
+        story = [Paragraph('Genomic Review Report', title_style), Spacer(1, 4 * mm)]
 
         patient_rows = [
             [as_paragraph('Field', table_header_style), as_paragraph('Value', table_header_style)],
             [as_paragraph('Patient ID', table_cell_style), as_paragraph(report_payload.patient_id, table_cell_style)],
         ]
-        if getattr(report_payload, 'case_label', None):
-            patient_rows.append(
-                [as_paragraph('Case Label', table_cell_style), as_paragraph(report_payload.case_label, table_cell_style)]
-            )
-        if getattr(report_payload, 'report_title', None):
-            patient_rows.append(
-                [as_paragraph('Report Title', table_cell_style), as_paragraph(report_payload.report_title, table_cell_style)]
-            )
-        if getattr(report_payload, 'source_filenames', None):
-            patient_rows.append(
-                [
-                    as_paragraph('Source File(s)', table_cell_style),
-                    as_paragraph(', '.join(report_payload.source_filenames), table_cell_style),
-                ]
-            )
         patient_table = Table(patient_rows, colWidths=[55 * mm, 115 * mm], repeatRows=1, splitByRow=1)
         patient_table.setStyle(
             TableStyle([
@@ -140,32 +146,29 @@ class FinalReportService:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ])
         )
-        story.append(Paragraph('1. Patient & Report Context', heading_style))
-        story.append(patient_table)
-        story.append(Spacer(1, 4 * mm))
+        story.append(KeepTogether([
+            Paragraph('1. Patient & Referral Context', heading_style),
+            patient_table,
+            Spacer(1, 4 * mm),
+        ]))
 
         intro_sections = [
-            ('2. Clinical Context (Extracted)', report_payload.clinical_phenotype),
-            ('3. AI Clinical Summary', report_payload.ai_clinical_summary),
+            ('2. Clinical Phenotype', report_payload.clinical_phenotype),
+            ('3. Clinical Interpretation Summary', report_payload.ai_clinical_summary),
         ]
         detail_sections = [
-            ('5. Evidence Categorisation', report_payload.expanded_evidence),
-            ('6. Current Classification Snapshot', report_payload.acmg_classification),
-            ('7. Clinical Integration', report_payload.clinical_integration),
-            ('8. Gene-/Disease-Associated Phenotype', report_payload.expected_symptoms),
+            ('5. Evidence Summary', report_payload.expanded_evidence),
+            ('6. ACMG Classification', report_payload.acmg_classification),
+            ('7. Clinical Correlation', report_payload.clinical_integration),
+            ('8. Expected Symptoms', report_payload.expected_symptoms),
             ('9. Recommendations', report_payload.recommendations),
             ('10. Limitations', report_payload.limitations),
         ]
 
         for heading, content in intro_sections:
-            if not content:
-                continue
-            story.append(Paragraph(heading, heading_style))
-            story.append(as_paragraph(content, body_style))
-            story.append(Spacer(1, 4 * mm))
+            add_section(story, heading, content)
 
         if report_payload.variant_summary_rows:
-            story.append(Paragraph('4. Variant Summary', heading_style))
             rows = [[
                 as_paragraph('Gene', table_header_style),
                 as_paragraph('Transcript HGVS', table_header_style),
@@ -191,24 +194,30 @@ class FinalReportService:
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ])
             )
-            story.append(variant_table)
-            story.append(Spacer(1, 4 * mm))
+            story.append(KeepTogether([
+                Paragraph('4. Variant Summary', heading_style),
+                variant_table,
+                Spacer(1, 4 * mm),
+            ]))
 
         for heading, content in detail_sections:
-            if not content:
-                continue
-            story.append(Paragraph(heading, heading_style))
-            story.append(as_paragraph(content, body_style))
-            story.append(Spacer(1, 4 * mm))
+            add_section(story, heading, content)
 
         if review_note:
             note = (review_note or '').strip()
             if note:
-                story.append(Paragraph('11. Clinician Review Note', heading_style))
-                story.append(as_paragraph(note, body_style))
-                story.append(Spacer(1, 4 * mm))
+                story.append(KeepTogether([
+                    Paragraph('11. Clinician Review Note', heading_style),
+                    as_paragraph(note, body_style),
+                    Spacer(1, 4 * mm),
+                ]))
 
-        story.append(as_paragraph('Generated for demo use only. Patient-facing release requires human clinical governance.', small_style))
+        story.append(
+            as_paragraph(
+                'AI-assisted draft prepared for demo use. Final release requires human clinical governance.',
+                small_style,
+            )
+        )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm)
