@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.agents.prompts import draft_prompt, extraction_prompt
+from app.agents.prompts import current_run_chat_prompt, draft_prompt, extraction_prompt
 from app.core.config import Settings
+from app.schemas.chat import RunChatAnswerDraft
 from app.schemas.draft import DraftPayload
 from app.schemas.report import ExtractedCase
 from pydantic import SecretStr
@@ -103,3 +104,47 @@ def build_draft_chain(settings: Settings):
             return dict(result)
 
     return LiveDraftChain()
+
+
+def build_embeddings_model(settings: Settings):
+    if settings.llm_provider == 'mock' or not settings.openai_api_key:
+        return None
+    from langchain_openai import OpenAIEmbeddings
+
+    return OpenAIEmbeddings(
+        model=settings.openai_embeddings_model,
+        api_key=SecretStr(settings.openai_api_key),
+    )
+
+
+def build_run_chat_chain(settings: Settings):
+    if settings.llm_provider == 'mock' or not settings.openai_api_key:
+        return None
+    from langchain_openai import ChatOpenAI
+
+    model = ChatOpenAI(
+        model=settings.openai_model,
+        api_key=SecretStr(settings.openai_api_key),
+        temperature=0,
+    )
+
+    class LiveRunChatChain:
+        def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+            from langchain_core.prompts import ChatPromptTemplate
+
+            prompt = ChatPromptTemplate.from_messages([
+                ('system', current_run_chat_prompt()),
+                (
+                    'human',
+                    'Question: {question}\n\n'
+                    'Retrieved context:\n{retrieved_context}\n\n'
+                    'Use only this material when answering.',
+                ),
+            ])
+            chain = prompt | model.with_structured_output(RunChatAnswerDraft)
+            result = chain.invoke(payload)
+            if isinstance(result, RunChatAnswerDraft):
+                return result.model_dump(mode='json')
+            return dict(result)
+
+    return LiveRunChatChain()

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 
+from app.schemas.chat import RunChatRequest, RunChatResponse
 from app.schemas.draft import ApproveResult, ClinicianReviewPayload, DropResult, ReportDraftUpdatePayload, ReviewResult, RunDropPayload
 from app.schemas.run import RunRequest, RunResponse
 
@@ -25,6 +26,11 @@ def review_run(run_id: str, payload: ClinicianReviewPayload, request: Request) -
 @router.patch('/runs/{run_id}/report-payload', response_model=RunResponse)
 def update_run_report_payload(run_id: str, payload: ReportDraftUpdatePayload, request: Request) -> RunResponse:
     return request.app.state.report_draft_service.update_report_payload(run_id, payload)
+
+
+@router.post('/runs/{run_id}/chat', response_model=RunChatResponse)
+def chat_on_run(run_id: str, payload: RunChatRequest, request: Request) -> RunChatResponse:
+    return request.app.state.run_chat_service.answer(run_id, payload)
 
 
 @router.post('/runs/{run_id}/approve', response_model=ApproveResult)

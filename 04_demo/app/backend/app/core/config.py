@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    openai_embeddings_model: str = "text-embedding-3-small"
+    run_chat_top_k: int = 4
     langchain_api_key: str | None = None
     langchain_tracing_v2: bool = False
 

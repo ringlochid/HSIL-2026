@@ -63,6 +63,9 @@ export interface VariantSummaryRow {
 
 export interface ReportPayload {
   patient_id: string
+  case_label?: string | null
+  report_title?: string | null
+  source_filenames?: string[]
   clinical_phenotype: string | null
   ai_clinical_summary: string | null
   variant_summary_rows: VariantSummaryRow[]
@@ -133,4 +136,22 @@ export interface DropResult {
   review_status: 'dropped'
   review_note: string | null
   reviewed_at: string | null
+}
+
+export interface RunChatRequest {
+  question: string
+}
+
+export interface RunChatCitation {
+  title: string
+  snippet: string
+  source_type: 'run_section' | 'report_extract' | 'evidence'
+  section: string | null
+}
+
+export interface RunChatResponse {
+  question: string
+  answer: string
+  grounded: boolean
+  citations: RunChatCitation[]
 }

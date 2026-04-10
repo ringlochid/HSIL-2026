@@ -2,6 +2,8 @@ import type {
   ApproveResult,
   ClinicianReviewPayload,
   DropResult,
+  RunChatRequest,
+  RunChatResponse,
   ReportDraftUpdatePayload,
   ReportKind,
   ReportUploadResponse,
@@ -90,6 +92,16 @@ export async function updateRunReportPayload(runId: string, payload: ReportDraft
   })
 
   return parseResponse<RunResponse>(response)
+}
+
+export async function askRunChat(runId: string, payload: RunChatRequest): Promise<RunChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/runs/${runId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse<RunChatResponse>(response)
 }
 
 export async function downloadRunPdf(runId: string): Promise<Blob> {

@@ -22,6 +22,7 @@ import { Button } from './components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
 import { Textarea } from './components/ui/textarea'
 import {
+  askRunChat,
   approveRun,
   buildRunPdfUrl,
   createRun,
@@ -35,6 +36,7 @@ import type {
   EvidenceSourceSummary,
   ReportDraftUpdatePayload,
   ReportKind,
+  RunChatCitation,
   RunResponse,
   UploadedReport,
 } from './lib/backend'
@@ -47,13 +49,6 @@ const starterPrompts = [
   'What evidence supports this report?',
 ]
 
-const starterMessages = [
-  {
-    role: 'assistant' as const,
-    text: 'I can answer questions grounded in the selected report, evidence summaries, and review notes.',
-  },
-]
-
 const pipelineSteps = [
   { id: 'upload', title: 'Upload report', body: 'Store the PDF and validate the report kind.' },
   { id: 'extract', title: 'Extract structured fields', body: 'Pull the case summary and variant payload into a normalized shape.' },
@@ -64,6 +59,9 @@ const pipelineSteps = [
 type ChatMessage = {
   role: 'assistant' | 'user'
   text: string
+  citations?: RunChatCitation[]
+  grounded?: boolean
+  error?: boolean
 }
 
 type PipelineMode = 'idle' | 'uploading' | 'creating_run' | 'ready' | 'error'
@@ -123,7 +121,9 @@ export default function App() {
   const [previewVersion, setPreviewVersion] = useState<number>(0)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>(starterMessages)
+  const [chatMessagesByRun, setChatMessagesByRun] = useState<Record<string, ChatMessage[]>>({})
+  const [chatSending, setChatSending] = useState(false)
+  const [autoOpenedRuns, setAutoOpenedRuns] = useState<Record<string, true>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const activeSession =
@@ -139,12 +139,36 @@ export default function App() {
     ? noteDrafts[activeSession.run.run_id] ?? activeSession.run.review_note ?? ''
     : ''
   const isWorking = pipelineMode === 'uploading' || pipelineMode === 'creating_run'
+  const chatAvailable =
+    activeSession?.run.run_status === 'completed' || activeSession?.run.run_status === 'degraded'
+  const messages = activeSession
+    ? chatMessagesByRun[activeSession.run.run_id] ?? [buildStarterMessage(activeSession)]
+    : []
 
   useEffect(() => {
     if (!selectedRunId && sessionRuns.length > 0) {
       setSelectedRunId(sessionRuns[0].run.run_id)
     }
   }, [selectedRunId, sessionRuns])
+
+  useEffect(() => {
+    if (!activeSession || !chatAvailable) {
+      setChatOpen(false)
+      return
+    }
+    if (autoOpenedRuns[activeSession.run.run_id]) {
+      return
+    }
+    setChatMessagesByRun((current) => ({
+      ...current,
+      [activeSession.run.run_id]: current[activeSession.run.run_id] ?? [buildStarterMessage(activeSession)],
+    }))
+    setChatOpen(true)
+    setAutoOpenedRuns((current) => ({
+      ...current,
+      [activeSession.run.run_id]: true,
+    }))
+  }, [activeSession, autoOpenedRuns, chatAvailable])
 
   const caseReference = activeSession ? formatCaseReference(activeSession.run.patient_id) : 'Awaiting run'
   const reportDate = activeSession ? formatDate(activeSession.upload.created_at) : 'Not yet generated'
@@ -206,6 +230,17 @@ export default function App() {
         ...current,
         [run.run_id]: run.review_note ?? '',
       }))
+      if (run.run_status === 'completed' || run.run_status === 'degraded') {
+        setChatMessagesByRun((current) => ({
+          ...current,
+          [run.run_id]: [buildStarterMessage(nextSession)],
+        }))
+        setChatOpen(true)
+        setAutoOpenedRuns((current) => ({
+          ...current,
+          [run.run_id]: true,
+        }))
+      }
       setPendingFile(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -396,20 +431,55 @@ export default function App() {
     fileInputRef.current?.click()
   }
 
-  function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
 
-    setMessages((current) => [
+    if (!activeSession || !chatAvailable || chatSending) {
+      return
+    }
+
+    setChatMessagesByRun((current) => ({
       ...current,
-      { role: 'user', text: trimmed },
-      {
-        role: 'assistant',
-        text: buildAssistantReply(trimmed, activeSession),
-      },
-    ])
+      [activeSession.run.run_id]: [
+        ...(current[activeSession.run.run_id] ?? [buildStarterMessage(activeSession)]),
+        { role: 'user', text: trimmed },
+      ],
+    }))
     setChatInput('')
     setChatOpen(true)
+    setChatSending(true)
+
+    try {
+      const response = await askRunChat(activeSession.run.run_id, { question: trimmed })
+      setChatMessagesByRun((current) => ({
+        ...current,
+        [activeSession.run.run_id]: [
+          ...(current[activeSession.run.run_id] ?? [buildStarterMessage(activeSession)]),
+          {
+            role: 'assistant',
+            text: response.answer,
+            citations: response.citations,
+            grounded: response.grounded,
+          },
+        ],
+      }))
+    } catch (error) {
+      setChatMessagesByRun((current) => ({
+        ...current,
+        [activeSession.run.run_id]: [
+          ...(current[activeSession.run.run_id] ?? [buildStarterMessage(activeSession)]),
+          {
+            role: 'assistant',
+            text: getErrorMessage(error),
+            grounded: false,
+            error: true,
+          },
+        ],
+      }))
+    } finally {
+      setChatSending(false)
+    }
   }
 
   return (
@@ -1199,9 +1269,10 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
-      <div className="fixed bottom-5 left-4 z-40 sm:bottom-6 sm:left-5">
-        <AnimatePresence initial={false}>
-          {chatOpen ? (
+      {chatAvailable && activeSession ? (
+        <div className="fixed bottom-5 left-4 z-40 sm:bottom-6 sm:left-5">
+          <AnimatePresence initial={false}>
+            {chatOpen ? (
             <motion.section
               key="chat-open"
               initial={{ opacity: 0, y: 18, scale: 0.96 }}
@@ -1216,9 +1287,7 @@ export default function App() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/58">Assistant</p>
                     <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.04em]">Talk to this report</h3>
                     <p className="mt-2 max-w-xs text-sm leading-6 text-white/68">
-                      {activeSession
-                        ? 'Answers stay grounded in the selected case summary, variant table, and evidence rail.'
-                        : 'The assistant UI is ready, but it becomes meaningfully grounded once a run has been generated.'}
+                      Answers stay grounded in {formatCaseReference(activeSession.run.patient_id)} and the currently selected report content.
                     </p>
                   </div>
                   <button
@@ -1256,13 +1325,44 @@ export default function App() {
                       className={cn(
                         'rounded-[20px] px-4 py-3 text-sm leading-6',
                         message.role === 'assistant'
-                          ? 'bg-white/8 text-white/84'
+                          ? message.error
+                            ? 'bg-[color:var(--danger)]/18 text-white'
+                            : 'bg-white/8 text-white/84'
                           : 'ml-auto max-w-[88%] bg-[color:var(--teal)] text-white',
                       )}
                     >
-                      {message.text}
+                      <p>{message.text}</p>
+                      {message.role === 'assistant' ? (
+                        <div className="mt-3 space-y-2">
+                          {message.grounded === false && !message.error ? (
+                            <Badge variant="warning">Limited confidence</Badge>
+                          ) : null}
+                          {message.citations?.map((citation, citationIndex) => (
+                            <div
+                              key={`${citation.title}-${citationIndex}`}
+                              className="rounded-2xl border border-white/8 bg-black/10 px-3 py-3 text-xs leading-5 text-white/76"
+                            >
+                              <p className="font-semibold text-white/88">
+                                {citation.title}
+                                {citation.section ? ` · ${citation.section}` : ''}
+                              </p>
+                              <p className="mt-1">{citation.snippet}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </motion.div>
                   ))}
+                  {chatSending ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="inline-flex items-center gap-3 rounded-[20px] bg-white/8 px-4 py-3 text-sm text-white/80"
+                    >
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      Searching the current run...
+                    </motion.div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 rounded-[22px] border border-white/10 bg-white/6 p-2">
@@ -1271,11 +1371,13 @@ export default function App() {
                       value={chatInput}
                       onChange={(event) => setChatInput(event.target.value)}
                       placeholder="Ask about the report findings..."
+                      disabled={chatSending}
                       className="min-h-[74px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/36"
                     />
                     <button
                       type="button"
                       onClick={() => sendMessage(chatInput)}
+                      disabled={chatSending}
                       className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[color:var(--chat-shell)] transition-transform hover:-translate-y-0.5"
                       aria-label="Send message"
                     >
@@ -1285,7 +1387,7 @@ export default function App() {
                 </div>
               </div>
             </motion.section>
-          ) : (
+            ) : (
             <motion.div
               key="chat-closed"
               initial={{ opacity: 0, y: 20 }}
@@ -1300,7 +1402,7 @@ export default function App() {
                 transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
               >
                 <LoaderCircle className="mr-3 h-4 w-4 animate-spin text-[color:var(--teal)]" />
-                {activeSession ? 'Grounded on current run' : 'Assistant standing by'}
+                Grounded on current run
               </motion.div>
 
               <motion.button
@@ -1314,9 +1416,10 @@ export default function App() {
                 Talk to report
               </motion.button>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1663,26 +1766,10 @@ function getErrorMessage(error: unknown) {
   return 'Something went wrong while communicating with the backend.'
 }
 
-function buildAssistantReply(input: string, activeSession: SessionRun | null) {
-  if (!activeSession) {
-    return 'Create a run first. The assistant UI is present, but the grounded report context only exists after the pipeline finishes.'
+function buildStarterMessage(session: SessionRun): ChatMessage {
+  return {
+    role: 'assistant',
+    text: `I can answer questions grounded in ${formatCaseReference(session.run.patient_id)}, the report draft, and the evidence returned for this run.`,
+    grounded: true,
   }
-
-  const lowered = input.toLowerCase()
-  const classification = extractPrimaryClassification(activeSession.run).label
-  const topGene = activeSession.run.report_payload.variant_summary_rows[0]?.gene || 'the primary gene'
-
-  if (lowered.includes('pathogenic')) {
-    return `The current run points to ${classification} evidence around ${topGene}. ClinVar, VEP, and the report summary are all visible in the evidence rail and report stage.`
-  }
-
-  if (lowered.includes('escalated')) {
-    return activeSession.run.report_payload.recommendations || 'This case remains staged for clinician review because the report recommendations still require human approval before release.'
-  }
-
-  if (lowered.includes('evidence')) {
-    return activeSession.run.report_payload.expanded_evidence || 'The evidence rail is populated from the backend evidence sources for this run.'
-  }
-
-  return 'This assistant is still UI-only in this pass. The shell is grounded on the current run data, but there is no backend chat endpoint wired yet.'
 }

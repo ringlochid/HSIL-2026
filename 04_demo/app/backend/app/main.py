@@ -17,9 +17,10 @@ from app.services.draft_render import DraftRenderService
 from app.services.intake import IntakeService
 from app.services.report_draft import ReportDraftService
 from app.services.recommendation import RecommendationService
+from app.services.run_chat import RunChatService
 from app.services.workflow import WorkflowService
 from app.tools.report_pdf import ReportPdfTool
-from app.agents.client import build_draft_chain, build_extraction_chain
+from app.agents.client import build_draft_chain, build_embeddings_model, build_extraction_chain, build_run_chat_chain
 from app.tools.registry import build_tool_registry
 
 
@@ -52,6 +53,8 @@ def create_app(settings=None) -> FastAPI:
     report_pdf_tool = ReportPdfTool()
     extraction_chain = build_extraction_chain(settings)
     draft_chain = build_draft_chain(settings)
+    run_chat_chain = build_run_chat_chain(settings)
+    embeddings_model = build_embeddings_model(settings)
     tool_registry = build_tool_registry(settings)
 
     app.state.settings = settings
@@ -68,6 +71,13 @@ def create_app(settings=None) -> FastAPI:
     )
     app.state.recommendation_service = RecommendationService(run_repo)
     app.state.report_draft_service = ReportDraftService(run_repo)
+    app.state.run_chat_service = RunChatService(
+        settings=settings,
+        run_repo=run_repo,
+        reports_repo=reports_repo,
+        answer_chain=run_chat_chain,
+        embeddings=embeddings_model,
+    )
     app.state.final_report_service = FinalReportService(settings, run_repo)
 
     app.include_router(build_api_router())

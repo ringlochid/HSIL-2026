@@ -1,3 +1,4 @@
+from .chat import RunChatAnswerDraft, RunChatCitation, RunChatRequest, RunChatResponse
 from .draft import ApproveResult, ClinicianReviewPayload, DraftPayload, DropResult, ReportDraftUpdatePayload, ReviewResult, RunDropPayload
 from .report import ExtractedCase, ExtractedVariant, ExtractionIssue, ReportUploadResponse, UploadedReport
 from .run import (
