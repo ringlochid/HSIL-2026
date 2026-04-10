@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
-
 from app.core.db import ReportRecord, session_scope
-from app.schemas.draft import ReviewResult
 from app.schemas.report import UploadedReport
 
 
@@ -35,19 +32,3 @@ class ReportsRepo:
 
     def update(self, report: UploadedReport) -> UploadedReport:
         return self.save(report)
-
-    def save_review(self, report_id: str, review: ReviewResult) -> ReviewResult:
-        with session_scope(self.session_factory) as session:
-            record = session.get(ReportRecord, report_id)
-            if record is None:
-                raise KeyError(report_id)
-            record.review_data = review.model_dump(mode='json')
-            session.add(record)
-        return review
-
-    def get_review(self, report_id: str) -> ReviewResult | None:
-        with session_scope(self.session_factory) as session:
-            record = session.get(ReportRecord, report_id)
-            if record is None or not record.review_data:
-                return None
-            return ReviewResult.model_validate(record.review_data)

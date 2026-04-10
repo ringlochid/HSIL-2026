@@ -20,6 +20,7 @@ Thumbs.db
 # Demo artifacts
 *.db
 *.sqlite
+04_demo/app/backend/data/
 
 # Notes that should stay local
 *.local.md

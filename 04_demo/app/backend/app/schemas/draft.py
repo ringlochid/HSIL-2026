@@ -24,6 +24,7 @@ class ClinicianReviewPayload(BaseModel):
 
 
 class ReviewResult(BaseModel):
+    run_id: str
     report_id: str
     status: Literal['reviewed'] = 'reviewed'
     reviewed_draft: DraftPayload

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
-from app.schemas.report import ExtractedCase, ReportUploadResponse, UploadedReport
+from app.schemas.report import ExtractedCase, ExtractionIssue, ReportKind, ReportUploadResponse, UploadedReport
 
 
 class IntakeService:
@@ -15,7 +15,12 @@ class IntakeService:
         self.report_pdf_tool = report_pdf_tool
         self.extraction_chain = extraction_chain
 
-    async def ingest_upload(self, upload: UploadFile) -> ReportUploadResponse:
+    async def ingest_upload(
+        self,
+        upload: UploadFile,
+        report_kind: ReportKind = 'test',
+        case_id: str | None = None,
+    ) -> ReportUploadResponse:
         filename = upload.filename or 'report.pdf'
         if not filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail='Only PDF uploads are supported.')
@@ -30,18 +35,13 @@ class IntakeService:
         file_path.write_bytes(content)
 
         pdf_result = self.report_pdf_tool.extract(file_path)
-        if self.extraction_chain is None:
-            extracted_payload = ExtractedCase.model_validate_json(
-                (self.settings.fixtures_root / 'reports' / 'ravi_extracted.json').read_text()
-            ).model_dump(mode='json')
-        else:
-            extracted_payload = self.extraction_chain.invoke({
-                'filename': filename,
-                'report_text': pdf_result.get('text', ''),
-            })
-        extracted_case = ExtractedCase.model_validate(extracted_payload)
-        warnings = list(pdf_result.get('warnings', []))
-        extraction_status = 'degraded' if warnings else 'completed'
+        extracted_case, extraction_status, warnings = self._build_extracted_case(
+            filename=filename,
+            report_kind=report_kind,
+            case_id=case_id,
+            report_text=pdf_result.get('text', ''),
+            pdf_warnings=list(pdf_result.get('warnings', [])),
+        )
 
         report = UploadedReport(
             report_id=report_id,
@@ -49,9 +49,55 @@ class IntakeService:
             content_type=upload.content_type or 'application/pdf',
             size_bytes=len(content),
             created_at=datetime.now(timezone.utc),
+            report_kind=report_kind,
+            case_id=case_id,
+            source_pdf_path=str(file_path),
             extraction_status=extraction_status,
             extracted_case=extracted_case,
             extraction_warnings=warnings,
         )
         self.reports_repo.save(report)
         return ReportUploadResponse(report=report)
+
+    def _build_extracted_case(
+        self,
+        filename: str,
+        report_kind: ReportKind,
+        case_id: str | None,
+        report_text: str,
+        pdf_warnings: list[str],
+    ) -> tuple[ExtractedCase, str, list[str]]:
+        warnings = list(pdf_warnings)
+        if self.extraction_chain is None:
+            if report_kind == 'patient':
+                issue_message = 'Patient report extraction unavailable without configured parser or AI model.'
+                extracted_case = ExtractedCase(
+                    case_label=case_id or 'patient-upload',
+                    report_title=filename,
+                    summary=issue_message,
+                    issues=[
+                        ExtractionIssue(
+                            code='patient_extraction_unavailable',
+                            message=issue_message,
+                            severity='error',
+                        )
+                    ],
+                )
+                warnings.append('patient_extraction_unavailable')
+                return extracted_case, 'blocked', warnings
+
+            extracted_case = ExtractedCase.model_validate_json(
+                (self.settings.fixtures_root / 'reports' / 'ravi_extracted.json').read_text()
+            )
+            if case_id:
+                extracted_case.case_label = case_id
+            return extracted_case, ('degraded' if warnings else 'completed'), warnings
+
+        extracted_payload = self.extraction_chain.invoke({
+            'filename': filename,
+            'report_text': report_text,
+        })
+        extracted_case = ExtractedCase.model_validate(extracted_payload)
+        if case_id:
+            extracted_case.case_label = case_id
+        return extracted_case, ('degraded' if warnings else 'completed'), warnings

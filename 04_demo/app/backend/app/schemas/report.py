@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+ReportKind = Literal['test', 'patient']
+ExtractionStatus = Literal['completed', 'degraded', 'blocked']
+
 
 class ExtractionIssue(BaseModel):
     code: str
@@ -36,7 +39,10 @@ class UploadedReport(BaseModel):
     content_type: str
     size_bytes: int
     created_at: datetime
-    extraction_status: Literal['completed', 'degraded']
+    report_kind: ReportKind = 'test'
+    case_id: str | None = None
+    source_pdf_path: str
+    extraction_status: ExtractionStatus
     extracted_case: ExtractedCase
     extraction_warnings: list[str] = Field(default_factory=list)
 

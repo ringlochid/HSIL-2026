@@ -236,29 +236,47 @@ Do not add extra schema modules unless the real code forces it later.
 Use for upload/report metadata **and extracted report content**.
 
 Keep this file minimal.
-Suggested models:
+Implemented models:
 - `UploadedReport`
 - `ReportUploadResponse`
 - `ExtractedCase`
 - `ExtractedVariant`
 - `ExtractionIssue`
 
+Important fields now included:
+- `report_kind: test | patient`
+- `case_id`
+- `source_pdf_path`
+- `extraction_status: completed | degraded | blocked`
+
 ### `app/schemas/run.py`
 Use for run request/response **and compact evidence summaries**.
 
 Keep this file minimal.
-Suggested models:
+Implemented models:
 - `RunRequest`
+- `BatchRunRequest`
 - `RunStatus`
 - `EvidenceSourceSummary`
 - `RunResponse`
+- `BatchRunResponse`
+- `FinalizeResponse`
+
+Important behavior now included:
+- each run has its own `run_id`
+- batch runs share a `batch_id`
+- blocked patient runs are represented explicitly instead of silently using fixture extraction
 
 ### `app/schemas/draft.py`
 Keep this file minimal.
-Suggested models:
+Implemented models:
 - `DraftPayload`
 - `ClinicianReviewPayload`
 - `ReviewResult`
+
+Important behavior now included:
+- reviews are stored against `run_id`
+- report-scoped review routes target the latest run for that report
 
 **Dropped on purpose:**
 - no separate `extracted_case.py`
@@ -280,15 +298,18 @@ Responsibilities:
 - save file metadata
 - save extraction result snapshot
 - retrieve report by `report_id`
-- save/retrieve review payloads
+- preserve report-level metadata like `report_kind`, `case_id`, and source PDF path inside stored JSON
 
 ### `app/repos/run_repo.py`
 Store run lifecycle in the real database.
 Responsibilities:
-- create run
+- create run keyed by `run_id`
+- optionally group runs under a `batch_id`
 - append run events
-- persist latest run response
-- get run by `report_id`
+- persist run response
+- retrieve latest run by `report_id`
+- save/retrieve review payloads by `run_id`
+- save/retrieve final PDF artifact path by `run_id`
 
 Tests should use a real DB connection as well:
 - local pytest -> SQLite database file
@@ -476,19 +497,28 @@ Expose helpers like:
 ## 8) API routes
 
 ### `app/api/routes/reports.py`
-Recommended endpoints:
+Implemented endpoints:
 - `POST /api/v1/reports/upload`
 
+Upload behavior now includes:
+- multipart file upload
+- `report_kind = test | patient`
+- optional `case_id`
+
 ### `app/api/routes/runs.py`
-Recommended endpoints:
+Implemented endpoints:
 - `POST /api/v1/reports/{report_id}/run`
+- `POST /api/v1/runs/batch`
+- `POST /api/v1/runs/{run_id}/finalize`
+- `GET /api/v1/runs/{run_id}/final.pdf`
 
 ### `app/api/routes/reviews.py`
-Recommended endpoints:
+Implemented endpoints:
 - `POST /api/v1/reports/{report_id}/review`
+- `POST /api/v1/runs/{run_id}/review`
 
 ### `app/api/routes/health.py`
-Recommended endpoints:
+Implemented endpoints:
 - `GET /healthz`
 
 ---
@@ -502,26 +532,30 @@ Recommended endpoints:
 - override settings to fixture mode for external APIs
 
 ### `tests/test_report_api.py`
-- upload report returns a report id
-- upload response includes initial extraction status + summary
+- upload **test** report returns a report id and extracted summary
+- upload **patient** report is stored but marked `blocked` when AI extraction is unavailable
 - reject invalid file types / oversize payloads
 
 ### `tests/test_run_flow.py`
-- uploaded fixture PDF and `POST /run` returns deterministic draft payload
-- run path from parsing -> evidence -> rules remains testable
+- uploaded test PDF and `POST /run` returns deterministic draft payload
+- patient run fails closed with `status=blocked`
+- batch run supports 2+ reports independently
 - tool fallback behavior is covered here instead of a separate test module
 - verify warning / degraded-evidence state stays visible in the run response
 
 ### `tests/test_review_api.py`
-- review payload accepted
-- edited draft stored correctly
-- review cannot silently erase required draft fields
+- run-scoped review payload accepted
+- report-scoped review still targets the latest run
+- blocked patient runs cannot be reviewed
+- finalization creates and serves a PDF artifact
 
 ### `tests/test_docker_integration.py`
 - skip unless docker stack URL is provided
 - call live backend container over HTTP
 - verify `/healthz` includes database OK
-- upload -> run -> review against the live Postgres-backed stack
+- upload test + patient reports
+- batch run against the live Postgres-backed stack
+- review a completed run and download the final PDF
 
 ---
 
@@ -571,7 +605,7 @@ Optional local non-Docker boot:
 5. PDF loading tool + fixture PDF
 6. LangChain extraction chain
 7. run workflow skeleton
-8. run endpoint implementation
+8. single-run endpoint implementation
 
 ### Phase C
 9. VEP / SpliceAI / ClinVar / Franklin fixture-backed tools
@@ -580,19 +614,25 @@ Optional local non-Docker boot:
 12. review endpoint
 
 ### Phase D
-13. tests (real SQLite DB + docker integration coverage)
-14. small frontend contract sync
-15. optional live API toggle after golden path is stable
+13. real DB-backed tests
+14. batch-run support for independent multi-report execution
+15. fail-closed patient handling when AI extraction is unavailable
+16. final PDF export endpoint + artifact storage
+17. shared frontend contract sync
+18. optional live API toggle after golden path is stable
 
 ---
 
 ## 12) Acceptance criteria
 
-- `POST /api/v1/reports/upload` accepts a sample report PDF
-- `POST /api/v1/reports/{id}/run` completes in local fixture mode within 5s
-- run response returns structured sections + confidence + limitations + next step
-- review endpoint stores reviewer edits
-- tool failures do not break the golden path
+- `POST /api/v1/reports/upload` accepts both test and patient PDFs
+- `POST /api/v1/reports/{id}/run` completes in local fixture mode within 5s for test reports
+- patient reports do not silently use demo fixture extraction when AI extraction is unavailable
+- `POST /api/v1/runs/batch` can run 2+ reports independently
+- review endpoints store reviewer edits against a concrete run
+- `POST /api/v1/runs/{run_id}/finalize` creates a stored PDF artifact
+- `GET /api/v1/runs/{run_id}/final.pdf` returns a valid PDF
+- tool failures do not break the golden path for test-mode runs
 - local pytest uses a real DB connection
 - docker integration test passes when the compose stack is up
 - one command boots backend successfully
@@ -605,19 +645,24 @@ Completed in this pass:
 1. infra files: `.env.example`, `requirements.txt`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`
 2. core files: `app/main.py`, `app/core/*`
 3. schemas + repos (**3 schema files only**)
-4. report upload route + fixture PDF pathing
+4. report upload route with `report_kind` + `case_id`
 5. LangChain extraction layer that auto-skips when no API-backed model is configured
-6. workflow + draft + review routes
-7. tests + fixtures
-8. shared contracts sync via `app/shared/contracts/backend-api.json`
+6. fail-closed patient upload/run behavior when extraction is unavailable
+7. single-run + batch-run workflow routes
+8. run-scoped + report-scoped review routes
+9. final PDF generation + download route
+10. tests + fixtures
+11. shared contracts sync via `app/shared/contracts/backend-api.json`
 
 ## 14) Verification status
 
 - ✅ local tests pass: `pytest`
 - ✅ local pytest uses a real SQLite DB connection
-- ✅ endpoints exercised: upload/run/review + health
+- ✅ endpoints exercised: upload/run/batch/review/finalize/final.pdf + health
+- ✅ batch flow supports multiple reports independently
+- ✅ patient reports are blocked instead of silently using demo extraction when AI extraction is unavailable
 - ✅ fallback coverage inside run-flow test
-- ✅ docker integration test file added for compose-stack verification
+- ✅ docker integration test passes against the compose-backed Postgres stack
 - ✅ tool mapping keeps only confirmed parameters in query strings
 - ✅ implementation plan/docs aligned to current route set
 

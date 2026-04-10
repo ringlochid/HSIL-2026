@@ -25,12 +25,16 @@ class ReportRecord(Base):
 
 
 class RunRecord(Base):
-    __tablename__ = 'runs'
+    __tablename__ = 'report_runs'
 
-    report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    run_id: Mapped[str] = mapped_column(String(64), unique=True)
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    report_id: Mapped[str] = mapped_column(String(64), index=True)
+    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default='completed')
     events: Mapped[list] = mapped_column(JSON)
     response_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    review_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    final_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 

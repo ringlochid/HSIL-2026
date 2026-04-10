@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     api_prefix: str = '/api/v1'
     allowed_origins_raw: str = Field('http://localhost:5173', alias='ALLOWED_ORIGINS')
     upload_dir: Path = Path('./data/uploads')
+    final_report_dir: Path = Path('./data/final_reports')
     max_upload_mb: int = 20
     database_url: str = 'sqlite+pysqlite:///./data/app.db'
 
@@ -53,12 +54,15 @@ class Settings(BaseSettings):
         return self.backend_root / 'app' / 'fixtures'
 
 
+def _resolve_runtime_path(settings: Settings, path: Path) -> Path:
+    return path if path.is_absolute() else settings.backend_root / path
+
+
 def ensure_runtime_dirs(settings: Settings) -> None:
-    upload_dir = settings.upload_dir
-    if not upload_dir.is_absolute():
-        upload_dir = settings.backend_root / upload_dir
-        settings.upload_dir = upload_dir
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.upload_dir = _resolve_runtime_path(settings, settings.upload_dir)
+    settings.final_report_dir = _resolve_runtime_path(settings, settings.final_report_dir)
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.final_report_dir.mkdir(parents=True, exist_ok=True)
 
     for prefix in ('sqlite+pysqlite:///', 'sqlite:///'):
         if settings.database_url.startswith(prefix):

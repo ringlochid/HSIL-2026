@@ -14,6 +14,7 @@ from app.repos.reports_repo import ReportsRepo
 from app.repos.run_repo import RunRepo
 from app.rules.clinic_rules import ClinicRules
 from app.services.draft_render import DraftRenderService
+from app.services.final_report import FinalReportService
 from app.services.intake import IntakeService
 from app.services.recommendation import RecommendationService
 from app.services.workflow import WorkflowService
@@ -65,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft_render_service=app.state.draft_render_service,
     )
     app.state.recommendation_service = RecommendationService(reports_repo, run_repo)
+    app.state.final_report_service = FinalReportService(settings, reports_repo, run_repo)
     app.include_router(build_api_router())
     return app
 
