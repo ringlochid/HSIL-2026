@@ -44,10 +44,23 @@ For MVP we assume:
 
 ---
 
-### 2) Variant interpretation history / clinical assertions
+### 2) Splice effect prediction
+**Candidate:** SpliceAI public lookup API (Broad SpliceAI-lookup service or local self-hosted equivalent)
+
+**Why second:** adds a focused signal for splice-region / intronic variants that VEP consequence labels alone may underspecify.
+
+**Use case:** attach splice-gain / splice-loss evidence (`DS_*`, `DP_*`) when the workflow needs to know whether a variant may materially alter splicing.
+
+**Risk note:** the public service is intended for interactive use, not batch traffic; rate limits and default-parameter drift are real. Always set `distance` and `mask` explicitly and keep fixture fallbacks.
+
+**Implementation shape:** `splice_prediction_provider` adapter + cached responses for selected test variants.
+
+---
+
+### 3) Variant interpretation history / clinical assertions
 **Candidate:** ClinVar-access pathways (via NCBI/available APIs and/or static references)
 
-**Why second:** supports “what is known” claims and confidence context.
+**Why third:** supports “what is known” claims and confidence context.
 
 **Use case:** attach significance/condition evidence and confidence bands to draft.
 
@@ -57,10 +70,10 @@ For MVP we assume:
 
 ---
 
-### 3) Variant canonicalization / id normalization
+### 4) Variant canonicalization / id normalization
 **Candidate:** ClinGen Allele Registry (or equivalent canonicalization path if tokenized in current infra)
 
-**Why third:** avoids noisy duplicate variant identities across sources.
+**Why fourth:** avoids noisy duplicate variant identities across sources.
 
 **Use case:** stable keying by standard identifiers in internal stores + logs.
 
@@ -68,7 +81,7 @@ For MVP we assume:
 
 ---
 
-### 4) Optional source-of-truth workflow benchmark
+### 5) Optional source-of-truth workflow benchmark
 **Candidate:** Franklin/Genoox API (if access credentials are available)
 
 **Why:** validates enterprise-style case/report workflow and informs endpoint shapes.
@@ -120,6 +133,7 @@ If an API fails during prototype, do one of:
 1. Confirm disease + referral lane (team finalization).
 2. Build API adapter interfaces (no UI yet):
    - `annotation_provider`
+   - `splice_prediction_provider`
    - `evidence_provider`
    - `normalization_provider`
 3. Implement local fixtures for each interface.

@@ -15,13 +15,13 @@ The backend should do only what the demo needs:
 ## Recommended ownership
 
 - `app/api/routes/` — FastAPI endpoints
-- `app/agents/` — LangChain `create_agent(...)` layer for report extraction, tool use, and draft wording
-- `app/tools/` — API adapters such as Franklin, Ensembl VEP, ClinVar
+- `app/agents/` — thin LangChain layer for report extraction, limited tool use, and draft wording
+- `app/tools/` — API adapters such as Franklin, Ensembl VEP, SpliceAI, and ClinVar
 - `app/services/` — ingestion, workflow, and draft assembly logic
 - `app/rules/` — deterministic disease/referral rules
-- `app/schemas/` — Pydantic request/response models
+- `app/schemas/` — minimal Pydantic request/response models
 - `app/fixtures/` — fixture responses and example payloads
-- `tests/` — backend tests for happy path + fallback cases
+- `tests/` — backend tests for upload, run flow, review, and fallback coverage
 
 ## Guardrail
 

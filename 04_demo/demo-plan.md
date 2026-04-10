@@ -51,8 +51,8 @@ This keeps the demo implementation isolated from the planning docs while still s
 ### Backend
 - thin FastAPI API
 - report upload + extraction flow
-- LangChain agent layer for extraction and draft wording
-- tool wrappers for Franklin / VEP / ClinVar
+- thin LangChain layer for extraction and draft wording
+- tool wrappers for Franklin / VEP / SpliceAI / ClinVar
 - deterministic decision rules
 - draft rendering
 
@@ -67,6 +67,8 @@ This keeps the demo implementation isolated from the planning docs while still s
 - canonical request/response contracts
 - sample cases
 - expected outputs for the golden-path demo
+
+Backend should consume shared contracts from here rather than duplicating schema snapshots inside backend fixtures.
 
 ## Demo scenario checklist
 

@@ -55,11 +55,8 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   ├── report.py
-│   │   ├── extracted_case.py
 │   │   ├── run.py
-│   │   ├── draft.py
-│   │   ├── evidence.py
-│   │   └── api.py
+│   │   └── draft.py
 │   ├── repos/
 │   │   ├── __init__.py
 │   │   ├── reports_repo.py
@@ -71,6 +68,7 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   │   ├── report_pdf.py
 │   │   ├── franklin.py
 │   │   ├── ensembl_vep.py
+│   │   ├── spliceai.py
 │   │   ├── clinvar.py
 │   │   └── registry.py
 │   ├── services/
@@ -93,18 +91,16 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   │   ├── reports/
 │   │   │   ├── ravi.pdf
 │   │   │   └── ravi_extracted.json
-│   │   ├── tools/
-│   │   │   ├── vep_fixtures.json
-│   │   │   ├── clinvar_fixtures.json
-│   │   │   └── franklin_fixtures.json
-│   │   └── contracts/
-│   │       └── shared-schema.json
+│   │   └── tools/
+│   │       ├── vep_fixtures.json
+│   │       ├── spliceai_fixtures.json
+│   │       ├── clinvar_fixtures.json
+│   │       └── franklin_fixtures.json
 │   └── tests/
 │       ├── conftest.py
 │       ├── test_report_api.py
 │       ├── test_run_flow.py
-│       ├── test_review_api.py
-│       └── test_tool_fallbacks.py
+│       └── test_review_api.py
 ```
 
 ---
@@ -126,7 +122,6 @@ Suggested keys:
 Upload / ingestion:
 - `UPLOAD_DIR=./data/uploads`
 - `MAX_UPLOAD_MB=20`
-- `PDF_PARSE_MODE=langchain`
 
 LLM / LangChain:
 - `OPENAI_API_KEY=`
@@ -137,12 +132,12 @@ LLM / LangChain:
 External APIs:
 - `USE_REAL_APIS=false`
 - `VEP_BASE_URL=https://rest.ensembl.org`
+- `SPLICEAI_BASE_URL=https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/`
 - `CLINVAR_BASE_URL=https://eutils.ncbi.nlm.nih.gov/entrez/eutils`
 - `FRANKLIN_BASE_URL=https://api.genoox.com`
 
 State:
 - `STATE_BACKEND=memory`
-- `STATE_DB_URL=`
 
 ### `.env`
 Create locally only. Do not commit.
@@ -231,55 +226,41 @@ Responsibilities:
 
 ## 3) API contracts first
 
+**Schema rule:** keep **3 schema files total** for MVP.
+Do not add extra schema modules unless the real code forces it later.
+
 ### `app/schemas/report.py`
-Use for upload/report metadata.
+Use for upload/report metadata **and extracted report content**.
 
+Keep this file minimal.
 Suggested models:
-- `ReportUploadResponse`
 - `UploadedReport`
-- `ReportMetadata`
-- `ReportListItem`
-
-### `app/schemas/extracted_case.py`
-Use for structured data pulled from the uploaded PDF.
-
-Suggested models:
+- `ReportUploadResponse`
 - `ExtractedCase`
-- `ExtractedPatientContext`
 - `ExtractedVariant`
 - `ExtractionIssue`
-- `ExtractionSummary`
 
 ### `app/schemas/run.py`
-Suggested models:
-- `RunTrigger`
-- `RunPublic`
-- `RunStatus`
-- `RunEvent`
-- `RunStep`
+Use for run request/response **and compact evidence summaries**.
 
-### `app/schemas/evidence.py`
-Use for normalized evidence objects from:
-- Franklin
-- Ensembl VEP
-- ClinVar
-- local/guideline sources
+Keep this file minimal.
+Suggested models:
+- `RunRequest`
+- `RunStatus`
+- `EvidenceSourceSummary`
+- `RunResponse`
 
 ### `app/schemas/draft.py`
+Keep this file minimal.
 Suggested models:
-- `DraftSection`
 - `DraftPayload`
-- `ConfidenceSummary`
 - `ClinicianReviewPayload`
 - `ReviewResult`
 
-### `app/schemas/api.py`
-Shared wrappers:
-- `ApiError`
-- `ApiResponse`
-- `PagedResponse`
-
----
+**Dropped on purpose:**
+- no separate `extracted_case.py`
+- no separate `evidence.py`
+- no generic API wrapper schema file
 
 ## 4) Repository / state layer
 
@@ -297,7 +278,6 @@ Responsibilities:
 - save file metadata
 - save extraction result snapshot
 - retrieve report by `report_id`
-- list reports for demo dashboard
 
 ### `app/repos/run_repo.py`
 Store run lifecycle.
@@ -338,6 +318,13 @@ Responsibilities:
 - annotate variant with transcript/consequence data
 - normalize to internal evidence schema
 - fallback to fixtures
+
+### `app/tools/spliceai.py`
+Responsibilities:
+- query splice-impact predictions for candidate variants
+- normalize SpliceAI delta scores / positions into compact evidence
+- fallback to fixtures
+- always set `distance` and `mask` explicitly
 
 ### `app/tools/clinvar.py`
 Responsibilities:
@@ -387,7 +374,7 @@ Use a **fixed linear workflow**, not a graph/orchestration runtime.
 Responsibilities:
 1. load extracted case from uploaded report
 2. normalize/parse variant
-3. collect evidence from tools
+3. collect evidence from tools (VEP / SpliceAI / ClinVar / Franklin as enabled)
 4. combine evidence
 5. apply deterministic rules
 6. compute confidence + missing fields
@@ -405,7 +392,7 @@ Responsibilities:
 
 ---
 
-## 7) Agent layer (required, but thin)
+## 7) LangChain layer (required, but thin)
 
 LangChain is **not optional** in this plan.
 It is the standard LLM/tool layer.
@@ -414,11 +401,13 @@ What it should do:
 - report text -> structured extraction
 - evidence summarization
 - clinician-friendly draft wording
+- limited tool calling where it clearly helps
 
 What it should **not** own:
 - final referral rule branching
 - fail-closed safety logic
 - core recommendation thresholds
+- a larger orchestration runtime
 
 ### `app/agents/client.py`
 - build the LangChain chat model client
@@ -436,9 +425,9 @@ Create concise prompt builders for:
 
 ### `app/agents/__init__.py`
 Expose helpers like:
-- `build_demo_agent(settings)`
 - `build_extraction_chain(settings)`
 - `build_draft_chain(settings)`
+- `build_tool_enabled_llm(settings)`
 
 ---
 
@@ -447,25 +436,18 @@ Expose helpers like:
 ### `app/api/routes/reports.py`
 Recommended endpoints:
 - `POST /api/v1/reports/upload`
-- `GET /api/v1/reports`
-- `GET /api/v1/reports/{report_id}`
-- `GET /api/v1/reports/{report_id}/extracted`
 
 ### `app/api/routes/runs.py`
 Recommended endpoints:
 - `POST /api/v1/reports/{report_id}/run`
-- `GET /api/v1/runs/{run_id}`
-- `POST /api/v1/runs/{run_id}/retry` (optional)
 
 ### `app/api/routes/reviews.py`
 Recommended endpoints:
-- `GET /api/v1/reports/{report_id}/draft`
 - `POST /api/v1/reports/{report_id}/review`
 
 ### `app/api/routes/health.py`
 Recommended endpoints:
 - `GET /healthz`
-- `GET /api/v1/health`
 
 ---
 
@@ -477,21 +459,20 @@ Recommended endpoints:
 - override settings to fixture mode
 
 ### `tests/test_report_api.py`
-- upload/list/get report
-- extracted payload endpoint returns expected structure
+- upload report returns a report id
+- upload response includes initial extraction status + summary
+- reject invalid file types / oversize payloads
 
 ### `tests/test_run_flow.py`
-- uploaded fixture PDF returns deterministic recommendation
-- run event log contains major stages from upload parsing to draft
+- uploaded fixture PDF and `POST /run` returns deterministic draft payload
+- run path from parsing -> evidence -> rules remains testable
+- tool fallback behavior is covered here instead of a separate test module
+- verify warning / degraded-evidence state stays visible in the run response
 
 ### `tests/test_review_api.py`
 - review payload accepted
 - edited draft stored correctly
-
-### `tests/test_tool_fallbacks.py`
-- simulate tool timeout/failure
-- verify fallback fixture is used
-- verify warning remains visible in output
+- review cannot silently erase required draft fields
 
 ---
 
@@ -535,17 +516,17 @@ Optional local non-Docker boot:
 ### Phase B
 5. PDF loading tool + fixture PDF
 6. LangChain extraction chain
-7. extracted report endpoint
-8. run lifecycle + workflow skeleton
+7. run workflow skeleton
+8. run endpoint implementation
 
 ### Phase C
-9. VEP / ClinVar / Franklin fixture-backed tools
+9. VEP / SpliceAI / ClinVar / Franklin fixture-backed tools
 10. deterministic rules
 11. draft rendering
 12. review endpoint
 
 ### Phase D
-13. tests + fallback tests
+13. tests (including fallback coverage inside run-flow tests)
 14. small frontend contract sync
 15. optional live API toggle after golden path is stable
 
@@ -554,9 +535,8 @@ Optional local non-Docker boot:
 ## 12) Acceptance criteria
 
 - `POST /api/v1/reports/upload` accepts a sample report PDF
-- `GET /api/v1/reports/{id}/extracted` returns structured extracted content
 - `POST /api/v1/reports/{id}/run` completes in local fixture mode within 5s
-- `/draft` returns structured sections + confidence + limitations + next step
+- run response returns structured sections + confidence + limitations + next step
 - review endpoint stores reviewer edits
 - tool failures do not break the golden path
 - one command boots backend successfully
@@ -568,8 +548,9 @@ Optional local non-Docker boot:
 Once you say **go**, generate these in order:
 1. infra files: `.env.example`, `requirements.txt`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`
 2. core files: `app/main.py`, `app/core/*`
-3. schemas + repos
+3. schemas + repos (**3 schema files only**)
 4. report upload route + fixture PDF pathing
 5. LangChain extraction layer
 6. workflow + draft + review routes
 7. tests + fixtures
+8. wire backend to `../shared/contracts` instead of duplicating contract files inside backend fixtures
