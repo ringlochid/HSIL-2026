@@ -14,6 +14,16 @@ class FranklinTool(FixtureBackedTool):
         if not self.settings.use_real_apis:
             fixture = self.load_fixture()
             return ToolResult(source=self.source, status='fixture', **fixture)
+        if not self.settings.franklin_api_token:
+            fixture = self.load_fixture()
+            return ToolResult(
+                source=self.source,
+                status='fallback',
+                request_identity=fixture['request_identity'],
+                summary=fixture['summary'],
+                warnings=['franklin_auth_unavailable'],
+                raw=None,
+            )
         try:
             return self._fetch_live()
         except Exception as exc:
@@ -28,16 +38,6 @@ class FranklinTool(FixtureBackedTool):
         )
         parse_response.raise_for_status()
         parse_payload = parse_response.json()
-        if not self.settings.franklin_api_token:
-            fixture = self.load_fixture()
-            return ToolResult(
-                source=self.source,
-                status='fallback',
-                request_identity=fixture['request_identity'],
-                summary=fixture['summary'],
-                warnings=['franklin_search_requires_auth'],
-                raw={'parse_payload': parse_payload},
-            )
         search_response = httpx.get(
             f'{self.settings.franklin_base_url}/v2/search/snp/',
             params={'search_text': self.SEARCH_TEXT},

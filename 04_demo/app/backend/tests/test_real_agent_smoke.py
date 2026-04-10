@@ -13,8 +13,8 @@ from app.main import create_app
 
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv('OPENAI_API_KEY'),
-    reason='OPENAI_API_KEY not configured',
+    os.getenv('HSIL_RUN_LIVE_API_SMOKE') != '1',
+    reason='Set HSIL_RUN_LIVE_API_SMOKE=1 to exercise live ClinVar/VEP/SpliceAI calls.',
 )
 
 
@@ -29,14 +29,14 @@ def build_pdf_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def test_real_agent_run_is_not_blocked_when_openai_available() -> None:
+def test_live_evidence_run_uses_real_apis_except_franklin() -> None:
     settings = Settings(
-        upload_dir=Path('/tmp') / 'hsil_real_uploads',
-        final_report_dir=Path('/tmp') / 'hsil_real_final_reports',
-        database_url='sqlite+pysqlite:////tmp/hsil_real_agent.db',
-        llm_provider='openai',
+        upload_dir=Path('/tmp') / 'hsil_live_uploads',
+        final_report_dir=Path('/tmp') / 'hsil_live_final_reports',
+        database_url='sqlite+pysqlite:////tmp/hsil_live_api_smoke.db',
+        llm_provider='mock',
         use_real_apis=True,
-        openai_api_key=os.getenv('OPENAI_API_KEY'),
+        franklin_api_token=None,
         max_upload_mb=20,
         debug=True,
     )
@@ -45,15 +45,21 @@ def test_real_agent_run_is_not_blocked_when_openai_available() -> None:
     with TestClient(app) as client:
         upload = client.post(
             '/api/v1/reports/upload',
-            files={'file': ('real-agent.pdf', build_pdf_bytes(), 'application/pdf')},
-            data={'report_kind': 'patient'},
+            files={'file': ('ravi-live-api.pdf', build_pdf_bytes(), 'application/pdf')},
+            data={'report_kind': 'test'},
         )
         assert upload.status_code == 201
         report_id = upload.json()['report']['report_id']
 
         response = client.post(
             '/api/v1/runs',
-            json={'patient_id': 'REAL-OPENAI', 'report_ids': [report_id]},
+            json={'patient_id': 'LIVE-EVIDENCE-001', 'report_ids': [report_id]},
         )
         assert response.status_code == 200
-        assert response.json()['run_status'] in {'completed', 'degraded'}
+
+        evidence = {item['source']: item for item in response.json()['evidence']}
+        assert evidence['vep']['status'] == 'live'
+        assert evidence['spliceai']['status'] == 'live'
+        assert evidence['clinvar']['status'] == 'live'
+        assert evidence['franklin']['status'] == 'fallback'
+        assert 'franklin_auth_unavailable' in evidence['franklin']['warnings']

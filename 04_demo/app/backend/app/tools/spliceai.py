@@ -32,7 +32,7 @@ class SpliceAiTool(FixtureBackedTool):
                 'distance': self.DISTANCE,
                 'mask': self.MASK,
             },
-            timeout=10.0,
+            timeout=30.0,
         )
         response.raise_for_status()
         payload = response.json()

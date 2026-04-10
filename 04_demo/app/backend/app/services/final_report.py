@@ -123,9 +123,11 @@ class FinalReportService:
         story.append(patient_table)
         story.append(Spacer(1, 4 * mm))
 
-        sections = [
+        intro_sections = [
             ('2. Clinical Phenotype (AI Extracted)', report_payload.clinical_phenotype),
             ('3. AI Clinical Summary', report_payload.ai_clinical_summary),
+        ]
+        detail_sections = [
             ('5. Expanded Evidence', report_payload.expanded_evidence),
             ('6. ACMG Classification', report_payload.acmg_classification),
             ('7. Clinical Integration', report_payload.clinical_integration),
@@ -134,7 +136,7 @@ class FinalReportService:
             ('10. Limitations', report_payload.limitations),
         ]
 
-        for heading, content in sections:
+        for heading, content in intro_sections:
             if not content:
                 continue
             story.append(Paragraph(heading, heading_style))
@@ -169,6 +171,13 @@ class FinalReportService:
                 ])
             )
             story.append(variant_table)
+            story.append(Spacer(1, 4 * mm))
+
+        for heading, content in detail_sections:
+            if not content:
+                continue
+            story.append(Paragraph(heading, heading_style))
+            story.append(as_paragraph(content, body_style))
             story.append(Spacer(1, 4 * mm))
 
         if review_note:

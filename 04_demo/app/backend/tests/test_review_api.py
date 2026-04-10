@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 
 
 def _prepare_run(client: TestClient, pdf_bytes: bytes) -> str:
@@ -54,6 +57,12 @@ def test_approve_generates_frozen_pdf(client: TestClient, pdf_bytes: bytes) -> N
     assert pdf.status_code == 200
     assert pdf.headers['content-type'].startswith('application/pdf')
     assert pdf.content.startswith(b'%PDF')
+
+    reader = PdfReader(BytesIO(pdf.content))
+    text = '\n'.join((page.extract_text() or '') for page in reader.pages)
+    assert '4. Variant Summary' in text
+    assert '5. Expanded Evidence' in text
+    assert text.index('4. Variant Summary') < text.index('5. Expanded Evidence')
 
 
 def test_drop_marks_run_dropped_and_blocks_pdf(client: TestClient, pdf_bytes: bytes) -> None:
