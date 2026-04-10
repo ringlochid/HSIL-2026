@@ -1,0 +1,184 @@
+{
+  "mode": "edit",
+  "projectId": "6966097640981800851",
+  "inputScreenId": "ad4ec032f3f54489b8a28ca9c83b1cc3",
+  "inputScreenSource": "state.current.mobile",
+  "stateUpdate": "current",
+  "deviceType": "MOBILE",
+  "modelId": "GEMINI_3_1_PRO",
+  "sourcePromptFile": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1-prompt.md",
+  "htmlUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzZjMGE3YzA0ZmFlNjQ5Y2Q4ZTFiNDBiYzhiZmMzYzYyEgsSBxCnuZ39rhwYAZIBIwoKcHJvamVjdF9pZBIVQhM2OTY2MDk3NjQwOTgxODAwODUx&filename=&opi=96797242",
+  "outputScreenId": "d865365245c64bf4920d32f45ec8af9c",
+  "exportedAt": "2026-04-10T06:14:10.344Z",
+  "renderedPreview": {
+    "previewPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1/screen.png",
+    "fullPagePath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1/screen-full.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 2,
+      "delayMs": 1500
+    },
+    "renderedCssSize": {
+      "width": 390,
+      "height": 844
+    },
+    "fullPageRenderedCssSize": {
+      "width": 390,
+      "height": 1286
+    },
+    "viewportCapture": {
+      "previewPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1/screen.png",
+      "renderedCssSize": {
+        "width": 390,
+        "height": 844
+      },
+      "imageSize": {
+        "width": 780,
+        "height": 1688
+      }
+    },
+    "fullPageCapture": {
+      "previewPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1/screen-full.png",
+      "renderedCssSize": {
+        "width": 390,
+        "height": 1286
+      },
+      "imageSize": {
+        "width": 780,
+        "height": 2572
+      }
+    },
+    "contentMetrics": {
+      "layoutHeight": 1326,
+      "domFullHeight": 1326,
+      "meaningfulHeight": 1254,
+      "meaningfulElementCount": 41
+    },
+    "imageSize": {
+      "width": 780,
+      "height": 1688
+    },
+    "fullPageImageSize": {
+      "width": 780,
+      "height": 2572
+    }
+  },
+  "semanticCheck": {
+    "rulesPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/semantic-rules.json",
+    "passed": true,
+    "bannedFound": [],
+    "missingRequiredAll": [],
+    "requiredAny": [
+      "Report uploaded",
+      "Fields reviewed",
+      "Interpretation run",
+      "Reviewer decision",
+      "Uncertainty & limitations"
+    ],
+    "requiredAnyFound": [
+      "Report uploaded",
+      "Fields reviewed",
+      "Interpretation run",
+      "Reviewer decision",
+      "Uncertainty & limitations"
+    ],
+    "preferredFound": [
+      {
+        "term": "source report",
+        "count": 1
+      },
+      {
+        "term": "extracted fields",
+        "count": 2
+      },
+      {
+        "term": "uncertainty",
+        "count": 1
+      }
+    ]
+  },
+  "preApprovalLockCheck": {
+    "preApprovalLockPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/pre-approval-lock.md",
+    "passed": true,
+    "pageTitle": {
+      "expected": "Referral support review",
+      "actual": "Referral support review",
+      "actualSource": "visible-text",
+      "matched": true
+    },
+    "missing": [],
+    "bannedFound": [],
+    "unexpectedTopFraming": [],
+    "matched": [
+      {
+        "kind": "siteTitle",
+        "expected": "HSIL"
+      },
+      {
+        "kind": "primaryNavLabel",
+        "expected": "Ravi"
+      },
+      {
+        "kind": "primaryNavLabel",
+        "expected": "Owen"
+      },
+      {
+        "kind": "keySectionHeading",
+        "expected": "Recommendation"
+      },
+      {
+        "kind": "keySectionHeading",
+        "expected": "Evidence bundle"
+      },
+      {
+        "kind": "keySectionHeading",
+        "expected": "Reviewer actions"
+      },
+      {
+        "kind": "keySectionHeading",
+        "expected": "Uncertainty & limitations"
+      },
+      {
+        "kind": "keyCtaLinkLabel",
+        "expected": "Approve & export"
+      },
+      {
+        "kind": "keyCtaLinkLabel",
+        "expected": "Hold for more data"
+      },
+      {
+        "kind": "requiredNoun",
+        "expected": "recommendation"
+      },
+      {
+        "kind": "requiredNoun",
+        "expected": "evidence"
+      },
+      {
+        "kind": "requiredNoun",
+        "expected": "review"
+      },
+      {
+        "kind": "requiredNoun",
+        "expected": "source report"
+      },
+      {
+        "kind": "requiredNoun",
+        "expected": "extracted fields"
+      }
+    ]
+  },
+  "copyLockCheck": null,
+  "reviewedAt": "2026-04-10T06:14:13.941Z",
+  "recovery": null,
+  "statePath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/state.json",
+  "designSystem": {
+    "assetId": "7950292308234b9e9ec2e1ea2ddc4a6e",
+    "displayName": "Helix Obsidian",
+    "jsonPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.json",
+    "mdPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.md",
+    "stylePath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-style.md",
+    "updatedAt": "2026-04-10T06:14:15.638Z"
+  }
+}

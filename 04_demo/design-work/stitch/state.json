@@ -7,19 +7,19 @@
     "jsonPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.json",
     "mdPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.md",
     "stylePath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-style.md",
-    "updatedAt": "2026-04-10T06:10:02.636Z"
+    "updatedAt": "2026-04-10T06:14:15.638Z"
   },
   "current": {
     "mobile": {
       "projectId": "6966097640981800851",
-      "screenId": "ad4ec032f3f54489b8a28ca9c83b1cc3",
+      "screenId": "d865365245c64bf4920d32f45ec8af9c",
       "deviceType": "MOBILE",
-      "outdir": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile",
-      "metaPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/meta.json",
+      "outdir": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1",
+      "metaPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/edit-1/meta.json",
       "recovery": null,
-      "updatedAt": "2026-04-10T06:10:02.636Z"
+      "updatedAt": "2026-04-10T06:14:15.638Z"
     }
   },
   "approved": {},
-  "updatedAt": "2026-04-10T06:10:02.636Z"
+  "updatedAt": "2026-04-10T06:14:15.639Z"
 }
