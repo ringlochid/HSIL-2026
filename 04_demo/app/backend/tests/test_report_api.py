@@ -12,22 +12,21 @@ def test_upload_test_report_returns_report_id_and_extraction_summary(client: Tes
     response = client.post(
         '/api/v1/reports/upload',
         files={'file': ('ravi-report.pdf', pdf_bytes, 'application/pdf')},
-        data={'report_kind': 'test', 'case_id': 'case-test-1'},
+        data={'report_kind': 'test'},
     )
     assert response.status_code == 201
     body = response.json()
     assert body['report']['report_id'].startswith('report_')
     assert body['report']['report_kind'] == 'test'
-    assert body['report']['case_id'] == 'case-test-1'
     assert body['report']['extraction_status'] == 'completed'
     assert body['report']['extracted_case']['variants'][0]['gene'] == 'RPE65'
 
 
-def test_upload_patient_report_is_stored_but_blocked_without_ai(client: TestClient, pdf_bytes: bytes) -> None:
+def test_upload_patient_report_is_blocked_without_ai(client: TestClient, pdf_bytes: bytes) -> None:
     response = client.post(
         '/api/v1/reports/upload',
         files={'file': ('patient.pdf', pdf_bytes, 'application/pdf')},
-        data={'report_kind': 'patient', 'case_id': 'patient-001'},
+        data={'report_kind': 'patient'},
     )
     assert response.status_code == 201
     body = response.json()
@@ -55,8 +54,8 @@ def test_upload_rejects_oversize_payload(tmp_path: Path, pdf_bytes: bytes) -> No
         debug=True,
     )
     app = create_app(settings)
-    with TestClient(app) as client:
-        response = client.post(
+    with TestClient(app) as local_client:
+        response = local_client.post(
             '/api/v1/reports/upload',
             files={'file': ('too-big.pdf', pdf_bytes, 'application/pdf')},
         )

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
-
-from app.schemas.draft import DraftPayload
 
 
 class RunStatus(str, Enum):
@@ -14,14 +13,16 @@ class RunStatus(str, Enum):
     blocked = 'blocked'
 
 
+class ReviewStatus(str, Enum):
+    pending_review = 'pending_review'
+    reviewed = 'reviewed'
+    approved = 'approved'
+    dropped = 'dropped'
+
+
 class RunRequest(BaseModel):
-    force_refresh: bool = False
-
-
-class BatchRunRequest(BaseModel):
+    patient_id: str = Field(min_length=1)
     report_ids: list[str] = Field(min_length=1)
-    mode: Literal['independent'] = 'independent'
-    force_refresh: bool = False
 
 
 class EvidenceSourceSummary(BaseModel):
@@ -32,26 +33,37 @@ class EvidenceSourceSummary(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class VariantSummaryRow(BaseModel):
+    gene: str | None = None
+    transcript_hgvs: str | None = None
+    protein_change: str | None = None
+    genomic_hg38: str | None = None
+    variation_type: str | None = None
+    consequence: str | None = None
+
+
+class ReportPayload(BaseModel):
+    patient_id: str
+    clinical_phenotype: str | None = None
+    ai_clinical_summary: str | None = None
+    variant_summary_rows: list[VariantSummaryRow] = Field(default_factory=list)
+    expanded_evidence: str | None = None
+    acmg_classification: str | None = None
+    clinical_integration: str | None = None
+    expected_symptoms: str | None = None
+    recommendations: str | None = None
+    limitations: str | None = None
+
+
 class RunResponse(BaseModel):
     run_id: str
-    report_id: str
-    batch_id: str | None = None
-    status: RunStatus
-    draft: DraftPayload
+    patient_id: str
+    report_ids: list[str]
+    run_status: RunStatus
+    review_status: ReviewStatus
+    report_payload: ReportPayload
     evidence: list[EvidenceSourceSummary] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
-
-
-class BatchRunResponse(BaseModel):
-    batch_id: str
-    mode: Literal['independent']
-    results: list[RunResponse] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-
-
-class FinalizeResponse(BaseModel):
-    run_id: str
-    report_id: str
-    status: Literal['finalized'] = 'finalized'
-    filename: str
-    download_path: str
+    review_note: str | None = None
+    reviewed_at: datetime | None = None
+    approved_pdf_path: str | None = None

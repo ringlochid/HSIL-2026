@@ -1,108 +1,159 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
 
-from sqlalchemy import desc, select
 
 from app.core.db import RunRecord, session_scope
-from app.schemas.draft import ReviewResult
-from app.schemas.run import RunResponse
+from app.schemas.draft import ApproveResult, DropResult, ReviewResult
+from app.schemas.run import RunResponse, RunStatus, ReviewStatus
 
 
 class RunRepo:
     def __init__(self, session_factory) -> None:
         self.session_factory = session_factory
 
-    def create_run(self, report_id: str, batch_id: str | None = None) -> str:
-        run_id = f'run_{uuid4().hex[:12]}'
+    def create_run(
+        self,
+        run_id: str,
+        patient_id: str,
+        report_ids: list[str],
+        run_status: RunStatus,
+        report_payload,
+        evidence,
+        warnings: list[str],
+    ) -> RunResponse:
         with session_scope(self.session_factory) as session:
             record = RunRecord(
                 run_id=run_id,
-                report_id=report_id,
-                batch_id=batch_id,
-                status='completed',
-                events=[],
-                response_data=None,
-                review_data=None,
-                final_pdf_path=None,
+                patient_id=patient_id,
+                report_ids=report_ids,
+                run_status=run_status.value,
+                review_status=ReviewStatus.pending_review.value,
+                report_payload=report_payload.model_dump(mode='json'),
+                evidence=[item.model_dump(mode='json') for item in evidence],
+                warnings=warnings,
                 updated_at=datetime.now(timezone.utc),
             )
-            session.add(record)
-        return run_id
+            session.merge(record)
 
-    def append_event(self, run_id: str, stage: str, detail: str) -> None:
-        with session_scope(self.session_factory) as session:
-            record = session.get(RunRecord, run_id)
-            if record is None:
-                raise KeyError(run_id)
-            events = list(record.events or [])
-            events.append({'stage': stage, 'detail': detail})
-            record.events = events
-            record.updated_at = datetime.now(timezone.utc)
-            session.add(record)
+            return RunResponse(
+                run_id=run_id,
+                patient_id=patient_id,
+                report_ids=report_ids,
+                run_status=RunStatus(record.run_status),
+                review_status=ReviewStatus(record.review_status),
+                report_payload=report_payload,
+                evidence=evidence,
+                warnings=warnings,
+                review_note=None,
+                reviewed_at=None,
+                approved_pdf_path=None,
+            )
 
-    def finalize(self, run_id: str, response: RunResponse) -> RunResponse:
+    def get(self, run_id: str) -> RunRecord | None:
         with session_scope(self.session_factory) as session:
-            record = session.get(RunRecord, run_id)
-            if record is None:
-                raise KeyError(run_id)
-            record.status = response.status.value if hasattr(response.status, 'value') else str(response.status)
-            record.response_data = response.model_dump(mode='json')
-            record.updated_at = datetime.now(timezone.utc)
-            session.add(record)
-        return response
+            return session.get(RunRecord, run_id)
 
     def get_run(self, run_id: str) -> RunResponse | None:
         with session_scope(self.session_factory) as session:
             record = session.get(RunRecord, run_id)
-            if record is None or not record.response_data:
+            if record is None:
                 return None
-            return RunResponse.model_validate(record.response_data)
 
-    def get_latest_run_by_report_id(self, report_id: str) -> RunResponse | None:
-        with session_scope(self.session_factory) as session:
-            stmt = (
-                select(RunRecord)
-                .where(RunRecord.report_id == report_id, RunRecord.response_data.is_not(None))
-                .order_by(desc(RunRecord.updated_at))
-                .limit(1)
+            from app.schemas.run import EvidenceSourceSummary, ReportPayload
+
+            evidence = [
+                EvidenceSourceSummary.model_validate(item)
+                for item in record.evidence or []
+            ]
+            payload = ReportPayload.model_validate(record.report_payload)
+            return RunResponse(
+                run_id=record.run_id,
+                patient_id=record.patient_id,
+                report_ids=list(record.report_ids or []),
+                run_status=RunStatus(record.run_status),
+                review_status=ReviewStatus(record.review_status),
+                report_payload=payload,
+                evidence=evidence,
+                warnings=list(record.warnings or []),
+                review_note=record.review_note,
+                reviewed_at=record.reviewed_at,
+                approved_pdf_path=record.approved_pdf_path,
             )
-            record = session.execute(stmt).scalar_one_or_none()
-            if record is None:
-                return None
-            return RunResponse.model_validate(record.response_data)
 
-    def save_review(self, run_id: str, review: ReviewResult) -> ReviewResult:
+    def add_review(self, run_id: str, review_note: str, reviewed_at: datetime) -> ReviewResult:
         with session_scope(self.session_factory) as session:
             record = session.get(RunRecord, run_id)
             if record is None:
                 raise KeyError(run_id)
-            record.review_data = review.model_dump(mode='json')
+            record.review_status = ReviewStatus.reviewed.value
+            record.review_note = review_note
+            record.reviewed_at = reviewed_at
             record.updated_at = datetime.now(timezone.utc)
             session.add(record)
-        return review
+            return ReviewResult(
+                run_id=run_id,
+                review_status='reviewed',
+                review_note=review_note,
+                reviewed_at=reviewed_at,
+            )
 
-    def get_review(self, run_id: str) -> ReviewResult | None:
-        with session_scope(self.session_factory) as session:
-            record = session.get(RunRecord, run_id)
-            if record is None or not record.review_data:
-                return None
-            return ReviewResult.model_validate(record.review_data)
-
-    def save_final_pdf_path(self, run_id: str, final_pdf_path: str) -> str:
+    def approve(self, run_id: str, approved_at: datetime) -> ApproveResult:
         with session_scope(self.session_factory) as session:
             record = session.get(RunRecord, run_id)
             if record is None:
                 raise KeyError(run_id)
-            record.final_pdf_path = final_pdf_path
+            record.review_status = ReviewStatus.approved.value
+            if record.reviewed_at is None:
+                record.reviewed_at = approved_at
+            record.approved_at = approved_at
+            record.updated_at = approved_at
+            session.add(record)
+            return ApproveResult(
+                run_id=run_id,
+                review_status='approved',
+                review_note=record.review_note,
+                reviewed_at=record.reviewed_at,
+                download_path=f'/api/v1/runs/{run_id}/pdf',
+            )
+
+    def drop(self, run_id: str, drop_note: str | None = None) -> DropResult:
+        with session_scope(self.session_factory) as session:
+            record = session.get(RunRecord, run_id)
+            if record is None:
+                raise KeyError(run_id)
+            record.review_status = ReviewStatus.dropped.value
+            if drop_note:
+                note = drop_note.strip()
+                if note:
+                    if record.review_note:
+                        record.review_note = f'{record.review_note}\n\n{note}'
+                    else:
+                        record.review_note = note
             record.updated_at = datetime.now(timezone.utc)
             session.add(record)
-        return final_pdf_path
+            return DropResult(
+                run_id=run_id,
+                review_status='dropped',
+                review_note=record.review_note,
+                reviewed_at=record.reviewed_at,
+            )
 
-    def get_final_pdf_path(self, run_id: str) -> str | None:
+    def save_approved_pdf_path(self, run_id: str, path: str) -> None:
+        with session_scope(self.session_factory) as session:
+            record = session.get(RunRecord, run_id)
+            if record is None:
+                raise KeyError(run_id)
+            record.approved_pdf_path = path
+            session.add(record)
+
+    def get_approved_pdf_path(self, run_id: str) -> str | None:
         with session_scope(self.session_factory) as session:
             record = session.get(RunRecord, run_id)
             if record is None:
                 return None
-            return record.final_pdf_path
+            return record.approved_pdf_path
+
+    def reset(self) -> None:
+        with session_scope(self.session_factory) as session:
+            session.query(RunRecord).delete()

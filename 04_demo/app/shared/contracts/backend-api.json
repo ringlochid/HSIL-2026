@@ -4,43 +4,39 @@
       "method": "POST",
       "path": "/api/v1/reports/upload"
     },
-    "run_report": {
+    "run_reports": {
       "method": "POST",
-      "path": "/api/v1/reports/{report_id}/run"
+      "path": "/api/v1/runs"
     },
-    "batch_run": {
-      "method": "POST",
-      "path": "/api/v1/runs/batch"
-    },
-    "review_report": {
-      "method": "POST",
-      "path": "/api/v1/reports/{report_id}/review"
+    "get_run": {
+      "method": "GET",
+      "path": "/api/v1/runs/{run_id}"
     },
     "review_run": {
       "method": "POST",
       "path": "/api/v1/runs/{run_id}/review"
     },
-    "finalize_run": {
+    "approve_run": {
       "method": "POST",
-      "path": "/api/v1/runs/{run_id}/finalize"
+      "path": "/api/v1/runs/{run_id}/approve"
     },
-    "download_final_pdf": {
+    "drop_run": {
+      "method": "POST",
+      "path": "/api/v1/runs/{run_id}/drop"
+    },
+    "run_pdf": {
       "method": "GET",
-      "path": "/api/v1/runs/{run_id}/final.pdf"
+      "path": "/api/v1/runs/{run_id}/pdf"
     },
     "healthz": {
       "method": "GET",
       "path": "/healthz"
     }
   },
-  "demo_case": {
-    "gene": "RPE65",
-    "transcript_hgvs": "NM_000329.3:c.260A>G",
-    "genomic_hg38": "chr1:68444869 T>C"
-  },
-  "report_kinds": [
-    "test",
-    "patient"
-  ],
-  "batch_mode": "independent"
+  "state_fields": [
+    "run_status",
+    "review_status",
+    "review_note",
+    "reviewed_at"
+  ]
 }

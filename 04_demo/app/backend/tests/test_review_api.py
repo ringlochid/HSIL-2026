@@ -3,72 +3,64 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-def _prepare_run(client: TestClient, pdf_bytes: bytes) -> dict:
+def _prepare_run(client: TestClient, pdf_bytes: bytes) -> str:
     upload = client.post(
         '/api/v1/reports/upload',
         files={'file': ('ravi-report.pdf', pdf_bytes, 'application/pdf')},
-        data={'report_kind': 'test', 'case_id': 'review-case'},
+        data={'report_kind': 'test'},
     )
     report_id = upload.json()['report']['report_id']
-    run_response = client.post(f'/api/v1/reports/{report_id}/run')
+    run_response = client.post(
+        '/api/v1/runs',
+        json={'patient_id': 'review-case', 'report_ids': [report_id]},
+    )
     assert run_response.status_code == 200
-    return {'report_id': report_id, 'run_id': run_response.json()['run_id']}
+    return run_response.json()['run_id']
 
 
-def test_review_accepts_payload_and_stores_edited_draft(client: TestClient, pdf_bytes: bytes) -> None:
-    ids = _prepare_run(client, pdf_bytes)
+def test_review_only_stores_note_and_timestamp(client: TestClient, pdf_bytes: bytes) -> None:
+    run_id = _prepare_run(client, pdf_bytes)
     response = client.post(
-        f"/api/v1/runs/{ids['run_id']}/review",
-        json={
-            'reviewer_name': 'Leo',
-            'reviewer_notes': 'Keep it review-required, but make the next step explicit.',
-            'next_step': 'Refer to retinal genetics review with phenotype confirmation.',
-        },
+        f'/api/v1/runs/{run_id}/review',
+        json={'reviewer_name': 'Leo', 'review_note': 'Looks good, minor wording tweak needed.'},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body['status'] == 'reviewed'
-    assert body['run_id'] == ids['run_id']
-    assert body['reviewed_draft']['next_step'].startswith('Refer to retinal genetics review')
+    assert body['run_id'] == run_id
+    assert body['review_status'] == 'reviewed'
+    assert body['review_note'] == 'Looks good, minor wording tweak needed.'
 
 
-def test_report_scoped_review_still_targets_latest_run(client: TestClient, pdf_bytes: bytes) -> None:
-    ids = _prepare_run(client, pdf_bytes)
-    response = client.post(
-        f"/api/v1/reports/{ids['report_id']}/review",
-        json={'reviewer_name': 'Leo', 'next_step': 'Proceed with clinician review only.'},
+def test_review_requires_note_text(client: TestClient, pdf_bytes: bytes) -> None:
+    run_id = _prepare_run(client, pdf_bytes)
+    response = client.post(f'/api/v1/runs/{run_id}/review', json={'reviewer_name': 'Leo', 'review_note': ''})
+    assert response.status_code == 400
+
+
+def test_approve_generates_frozen_pdf(client: TestClient, pdf_bytes: bytes) -> None:
+    run_id = _prepare_run(client, pdf_bytes)
+    client.post(
+        f'/api/v1/runs/{run_id}/review',
+        json={'reviewer_name': 'Leo', 'review_note': 'Approved with note.'},
     )
+
+    response = client.post(f'/api/v1/runs/{run_id}/approve')
     assert response.status_code == 200
-    assert response.json()['run_id'] == ids['run_id']
+    body = response.json()
+    assert body['run_id'] == run_id
+    assert body['download_path'].endswith('/pdf')
 
-
-def test_review_cannot_process_blocked_patient_run(client: TestClient, pdf_bytes: bytes) -> None:
-    upload = client.post(
-        '/api/v1/reports/upload',
-        files={'file': ('patient.pdf', pdf_bytes, 'application/pdf')},
-        data={'report_kind': 'patient', 'case_id': 'patient-review'},
-    )
-    report_id = upload.json()['report']['report_id']
-    run = client.post(f'/api/v1/reports/{report_id}/run')
-    run_id = run.json()['run_id']
-    response = client.post(f'/api/v1/runs/{run_id}/review', json={'recommendation': 'override'})
-    assert response.status_code == 409
-
-
-def test_finalize_creates_pdf_artifact_and_downloads_it(client: TestClient, pdf_bytes: bytes) -> None:
-    ids = _prepare_run(client, pdf_bytes)
-    review = client.post(
-        f"/api/v1/runs/{ids['run_id']}/review",
-        json={'reviewer_name': 'Leo', 'reviewer_notes': 'Looks good.'},
-    )
-    assert review.status_code == 200
-
-    finalize = client.post(f"/api/v1/runs/{ids['run_id']}/finalize")
-    assert finalize.status_code == 200
-    body = finalize.json()
-    assert body['download_path'] == f"/api/v1/runs/{ids['run_id']}/final.pdf"
-
-    pdf = client.get(body['download_path'])
+    pdf = client.get(f'/api/v1/runs/{run_id}/pdf')
     assert pdf.status_code == 200
     assert pdf.headers['content-type'].startswith('application/pdf')
     assert pdf.content.startswith(b'%PDF')
+
+
+def test_drop_marks_run_dropped_and_blocks_pdf(client: TestClient, pdf_bytes: bytes) -> None:
+    run_id = _prepare_run(client, pdf_bytes)
+    drop = client.post(f'/api/v1/runs/{run_id}/drop', json={'review_note': 'Noisy extraction.'})
+    assert drop.status_code == 200
+    assert drop.json()['review_status'] == 'dropped'
+
+    pdf = client.get(f'/api/v1/runs/{run_id}/pdf')
+    assert pdf.status_code == 409

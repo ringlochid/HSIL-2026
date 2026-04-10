@@ -40,7 +40,6 @@ class UploadedReport(BaseModel):
     size_bytes: int
     created_at: datetime
     report_kind: ReportKind = 'test'
-    case_id: str | None = None
     source_pdf_path: str
     extraction_status: ExtractionStatus
     extracted_case: ExtractedCase

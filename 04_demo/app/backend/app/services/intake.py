@@ -19,7 +19,6 @@ class IntakeService:
         self,
         upload: UploadFile,
         report_kind: ReportKind = 'test',
-        case_id: str | None = None,
     ) -> ReportUploadResponse:
         filename = upload.filename or 'report.pdf'
         if not filename.lower().endswith('.pdf'):
@@ -38,7 +37,6 @@ class IntakeService:
         extracted_case, extraction_status, warnings = self._build_extracted_case(
             filename=filename,
             report_kind=report_kind,
-            case_id=case_id,
             report_text=pdf_result.get('text', ''),
             pdf_warnings=list(pdf_result.get('warnings', [])),
         )
@@ -50,7 +48,6 @@ class IntakeService:
             size_bytes=len(content),
             created_at=datetime.now(timezone.utc),
             report_kind=report_kind,
-            case_id=case_id,
             source_pdf_path=str(file_path),
             extraction_status=extraction_status,
             extracted_case=extracted_case,
@@ -63,7 +60,6 @@ class IntakeService:
         self,
         filename: str,
         report_kind: ReportKind,
-        case_id: str | None,
         report_text: str,
         pdf_warnings: list[str],
     ) -> tuple[ExtractedCase, str, list[str]]:
@@ -72,7 +68,7 @@ class IntakeService:
             if report_kind == 'patient':
                 issue_message = 'Patient report extraction unavailable without configured parser or AI model.'
                 extracted_case = ExtractedCase(
-                    case_label=case_id or 'patient-upload',
+                    case_label='patient-upload',
                     report_title=filename,
                     summary=issue_message,
                     issues=[
@@ -89,8 +85,6 @@ class IntakeService:
             extracted_case = ExtractedCase.model_validate_json(
                 (self.settings.fixtures_root / 'reports' / 'ravi_extracted.json').read_text()
             )
-            if case_id:
-                extracted_case.case_label = case_id
             return extracted_case, ('degraded' if warnings else 'completed'), warnings
 
         extracted_payload = self.extraction_chain.invoke({
@@ -98,6 +92,4 @@ class IntakeService:
             'report_text': report_text,
         })
         extracted_case = ExtractedCase.model_validate(extracted_payload)
-        if case_id:
-            extracted_case.case_label = case_id
         return extracted_case, ('degraded' if warnings else 'completed'), warnings

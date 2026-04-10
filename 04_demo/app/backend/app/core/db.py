@@ -28,13 +28,17 @@ class RunRecord(Base):
     __tablename__ = 'report_runs'
 
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    report_id: Mapped[str] = mapped_column(String(64), index=True)
-    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(32), default='completed')
-    events: Mapped[list] = mapped_column(JSON)
-    response_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    review_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    final_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    patient_id: Mapped[str] = mapped_column(String(64), index=True)
+    report_ids: Mapped[list[str]] = mapped_column(JSON)
+    run_status: Mapped[str] = mapped_column(String(32), default='completed')
+    review_status: Mapped[str] = mapped_column(String(32), default='pending_review')
+    report_payload: Mapped[dict] = mapped_column(JSON)
+    evidence: Mapped[list[dict]] = mapped_column(JSON)
+    warnings: Mapped[list[str]] = mapped_column(JSON)
+    review_note: Mapped[str | None] = mapped_column(String, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
