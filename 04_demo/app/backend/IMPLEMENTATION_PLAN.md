@@ -42,6 +42,7 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   ├── main.py
 │   ├── core/
 │   │   ├── config.py
+│   │   ├── db.py
 │   │   ├── logging.py
 │   │   └── deps.py
 │   ├── api/
@@ -60,8 +61,7 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   ├── repos/
 │   │   ├── __init__.py
 │   │   ├── reports_repo.py
-│   │   ├── run_repo.py
-│   │   └── memory_store.py
+│   │   └── run_repo.py
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── base.py
@@ -99,7 +99,8 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │       ├── conftest.py
 │       ├── test_report_api.py
 │       ├── test_run_flow.py
-│       └── test_review_api.py
+│       ├── test_review_api.py
+│       └── test_docker_integration.py
 ```
 
 ---
@@ -136,7 +137,7 @@ External APIs:
 - `FRANKLIN_BASE_URL=https://api.genoox.com`
 
 State:
-- `STATE_BACKEND=memory`
+- `DATABASE_URL=sqlite+pysqlite:///./data/app.db`
 
 ### `.env`
 Create locally only. Do not commit.
@@ -169,6 +170,8 @@ At minimum:
 - `pytest`
 - `pytest-asyncio`
 - `orjson`
+- `SQLAlchemy`
+- `psycopg[binary]`
 
 Optional later:
 - `pymupdf` if PDF extraction quality becomes an issue
@@ -189,12 +192,13 @@ Use a simple Python image:
 - start with `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
 ### `docker-compose.yml`
-Single backend service for now:
-- build local Dockerfile
+Use a two-service stack:
+- `db` = Postgres for real persistence
+- `backend` = FastAPI app connected via `DATABASE_URL`
 - mount env file
 - expose backend on port 8000
 - mount upload directory if needed
-- no Redis/Postgres unless later needed
+- wait for Postgres health before backend boot
 
 ### `.dockerignore`
 Ignore at minimum:
@@ -263,29 +267,32 @@ Suggested models:
 
 ## 4) Repository / state layer
 
-### `app/repos/memory_store.py`
-Simple in-memory store for demo mode.
+### `app/core/db.py`
 Responsibilities:
-- `save`
-- `get`
-- `update`
+- build SQLAlchemy engine + session factory
+- define DB tables for reports and runs
+- initialize tables on app startup/import path
+- expose a simple DB health ping
 
 ### `app/repos/reports_repo.py`
-Store uploaded report records.
+Store uploaded report records in the real database.
 Responsibilities:
 - save file metadata
 - save extraction result snapshot
 - retrieve report by `report_id`
+- save/retrieve review payloads
 
 ### `app/repos/run_repo.py`
-Store run lifecycle.
+Store run lifecycle in the real database.
 Responsibilities:
 - create run
-- update run status
 - append run events
+- persist latest run response
 - get run by `report_id`
 
-> Phase 1 should stay memory-backed unless persistence becomes necessary.
+Tests should use a real DB connection as well:
+- local pytest -> SQLite database file
+- docker integration -> Postgres container
 
 ---
 
@@ -427,12 +434,12 @@ Responsibilities:
 
 ---
 
-## 7) LangChain layer (required, but thin)
+## 7) LangChain layer (optional at runtime, thin when enabled)
 
-LangChain is **not optional** in this plan.
-It is the standard LLM/tool layer.
+LangChain is the standard LLM/tool layer **when an API key is configured**.
+If no API-backed model is configured, skip the AI layer and use deterministic / fixture-backed paths.
 
-What it should do:
+What it should do when enabled:
 - report text -> structured extraction
 - evidence summarization
 - clinician-friendly draft wording
@@ -491,7 +498,8 @@ Recommended endpoints:
 ### `tests/conftest.py`
 - app fixture
 - test client
-- override settings to fixture mode
+- real SQLite DB connection per test run
+- override settings to fixture mode for external APIs
 
 ### `tests/test_report_api.py`
 - upload report returns a report id
@@ -509,6 +517,12 @@ Recommended endpoints:
 - edited draft stored correctly
 - review cannot silently erase required draft fields
 
+### `tests/test_docker_integration.py`
+- skip unless docker stack URL is provided
+- call live backend container over HTTP
+- verify `/healthz` includes database OK
+- upload -> run -> review against the live Postgres-backed stack
+
 ---
 
 ## 10) Containerization / boot
@@ -523,15 +537,20 @@ Needed behavior:
 
 ### `docker-compose.yml`
 Needed behavior:
-- build local backend image
+- start Postgres and backend together
 - use `.env`
+- backend uses `DATABASE_URL` pointed at Postgres
 - mount upload directory if useful
-- expose `8000:8000`
+- keep backend on internal port `8000`
 
 ### Local boot flow
 Target commands:
 - `cp .env.example .env`
 - `docker compose up --build`
+- optional docker-stack integration test (containerized execution):
+  - `docker compose exec backend env HSIL_DOCKER_BASE_URL=http://localhost:8000 pytest -q tests/test_docker_integration.py`
+- if you expose backend port explicitly on host, you can alternatively:
+  - `HSIL_DOCKER_BASE_URL=http://localhost:<host_port> pytest -q tests/test_docker_integration.py`
 
 Optional local non-Docker boot:
 - `python -m venv .venv`
@@ -544,8 +563,8 @@ Optional local non-Docker boot:
 
 ### Phase A
 1. `.env.example`, `requirements.txt`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml`
-2. `config.py`, `main.py`, logging, deps
-3. upload/report schemas + repos
+2. `config.py`, `db.py`, `main.py`, logging, deps
+3. upload/report schemas + DB-backed repos
 4. `reports/upload` API
 
 ### Phase B
@@ -561,7 +580,7 @@ Optional local non-Docker boot:
 12. review endpoint
 
 ### Phase D
-13. tests (including fallback coverage inside run-flow tests)
+13. tests (real SQLite DB + docker integration coverage)
 14. small frontend contract sync
 15. optional live API toggle after golden path is stable
 
@@ -574,18 +593,31 @@ Optional local non-Docker boot:
 - run response returns structured sections + confidence + limitations + next step
 - review endpoint stores reviewer edits
 - tool failures do not break the golden path
+- local pytest uses a real DB connection
+- docker integration test passes when the compose stack is up
 - one command boots backend successfully
 
 ---
 
-## 13) Next file creation pass
+## 13) Implementation status (applied)
 
-Once you say **go**, generate these in order:
+Completed in this pass:
 1. infra files: `.env.example`, `requirements.txt`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`
 2. core files: `app/main.py`, `app/core/*`
 3. schemas + repos (**3 schema files only**)
 4. report upload route + fixture PDF pathing
-5. LangChain extraction layer
+5. LangChain extraction layer that auto-skips when no API-backed model is configured
 6. workflow + draft + review routes
 7. tests + fixtures
-8. wire backend to `../shared/contracts` instead of duplicating contract files inside backend fixtures
+8. shared contracts sync via `app/shared/contracts/backend-api.json`
+
+## 14) Verification status
+
+- ✅ local tests pass: `pytest`
+- ✅ local pytest uses a real SQLite DB connection
+- ✅ endpoints exercised: upload/run/review + health
+- ✅ fallback coverage inside run-flow test
+- ✅ docker integration test file added for compose-stack verification
+- ✅ tool mapping keeps only confirmed parameters in query strings
+- ✅ implementation plan/docs aligned to current route set
+

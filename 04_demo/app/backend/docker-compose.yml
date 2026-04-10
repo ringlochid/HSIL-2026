@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hsil_demo
+      POSTGRES_USER: hsil
+      POSTGRES_PASSWORD: hsil
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hsil -d hsil_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://hsil:hsil@db:5432/hsil_demo
+      LLM_PROVIDER: mock
+      USE_REAL_APIS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    volumes:
+      - ./data/uploads:/app/data/uploads
+
+volumes:
+  postgres-data:

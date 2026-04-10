@@ -12,22 +12,33 @@ The backend should do only what the demo needs:
 - produce a clinician-reviewable draft
 - return a final review-ready output
 
-## Recommended ownership
+## Implemented API
 
-- `app/api/routes/` — FastAPI endpoints
-- `app/agents/` — thin LangChain layer for report extraction, limited tool use, and draft wording
-- `app/tools/` — API adapters such as Franklin, Ensembl VEP, SpliceAI, and ClinVar
-- `app/services/` — ingestion, workflow, and draft assembly logic
-- `app/rules/` — deterministic disease/referral rules
-- `app/schemas/` — minimal Pydantic request/response models
-- `app/fixtures/` — fixture responses and example payloads
-- `tests/` — backend tests for upload, run flow, review, and fallback coverage
+- `POST /api/v1/reports/upload`
+- `POST /api/v1/reports/{report_id}/run`
+- `POST /api/v1/reports/{report_id}/review`
+- `GET /healthz`
+
+## Implemented shape
+
+- thin FastAPI app
+- real SQLAlchemy-backed persistence
+- docker compose stack with Postgres
+- thin LangChain layer that is **skipped** when no API key is configured
+- fixture-backed evidence tools for the demo lane
+- hardcoded stable request mapping for the RPE65 demo case
+- deterministic review-required draft generation
+
+## Testing
+
+- local pytest uses a real SQLite database connection
+- docker integration test can run against the live compose stack when the container is up
 
 ## Guardrail
 
 Do not let backend complexity outrun the demo.
-Use LangChain as the standard LLM/tool layer, but keep the decision logic readable and mostly deterministic.
+Use LangChain only when an API key is actually present, and keep the decision logic readable and mostly deterministic.
 
 ## File-level plan
 
-See `IMPLEMENTATION_PLAN.md` for the full file-by-file backend build plan (including env/settings, requirements, Dockerfile, and docker-compose).
+See `IMPLEMENTATION_PLAN.md` for the current implementation-aligned plan.

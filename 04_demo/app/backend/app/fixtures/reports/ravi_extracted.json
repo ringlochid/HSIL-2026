@@ -1,0 +1,17 @@
+{
+  "case_label": "Ravi",
+  "report_title": "RPE65 variant review demo case",
+  "summary": "Uploaded genomic report contains RPE65 c.260A>G / p.Asp87Gly for the demo workflow.",
+  "genome_build": "GRCh38",
+  "variants": [
+    {
+      "gene": "RPE65",
+      "transcript_hgvs": "NM_000329.3:c.260A>G",
+      "protein_change": "p.Asp87Gly",
+      "genomic_hg38": "chr1:68444869 T>C",
+      "variation_type": "single nucleotide variant",
+      "consequence": "missense variant"
+    }
+  ],
+  "issues": []
+}
