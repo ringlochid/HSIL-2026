@@ -176,3 +176,48 @@ class VepVariantAnnotation(BaseModel):
 - Cache by variant key
 - If you get HTTP 429/5xx, fallback to fixture + warning
 - Record `request_error` in run log for auditability
+
+---
+
+## Demo-case mapping: `RPE65 c.260A>G`
+
+For the current demo case, the clean VEP input is the transcript HGVS form:
+
+```http
+GET https://rest.ensembl.org/vep/human/hgvs/NM_000329.3:c.260A>G?content-type=application/json
+```
+
+### Canonical filter to match the UI search intent
+From `transcript_consequences[]`, filter by:
+- `gene_symbol == "RPE65"`
+- `cds_start == 260`
+- `protein_start == 87`
+
+### Canonical transcript facts returned
+- `gene_symbol` -> `RPE65`
+- `transcript_id` -> `ENST00000262340`
+- `biotype` -> `protein_coding`
+- `consequence_terms` includes `missense_variant`
+- `amino_acids` -> `D/G`
+- `protein_start` -> `87`
+- `cds_start` -> `260`
+
+### How to reproduce the UI-style consequence percentages
+If you count all returned consequence terms across all transcripts for this variant, you get:
+- `missense_variant` -> `4 / 9` -> `44.4%`
+- `NMD_transcript_variant` -> `4 / 9` -> `44.4%`
+- `3_prime_UTR_variant` -> `1 / 9` -> `11.1%`
+
+So the percentages in the UI can be reproduced from the returned transcript consequence mix, rather than from a separate endpoint.
+
+### Important normalization note
+RPE65 is on the **minus strand**.
+So transcript `c.260A>G` maps to genomic GRCh38 `chr1:68444869 T>C`.
+Keep that genomic form for tools like SpliceAI.
+
+### Tool recommendation for this demo
+For the demo tool, it is reasonable to hardcode:
+
+```text
+hgvs = NM_000329.3:c.260A>G
+```

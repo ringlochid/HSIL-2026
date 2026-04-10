@@ -80,8 +80,7 @@ So in this app, **intake is report ingestion**, not manual form-first case entry
 │   ├── rules/
 │   │   ├── __init__.py
 │   │   ├── base.py
-│   │   ├── clinic_rules.py
-│   │   └── lane_overrides.py
+│   │   └── clinic_rules.py
 │   ├── agents/
 │   │   ├── __init__.py
 │   │   ├── client.py
@@ -269,7 +268,6 @@ Simple in-memory store for demo mode.
 Responsibilities:
 - `save`
 - `get`
-- `list`
 - `update`
 
 ### `app/repos/reports_repo.py`
@@ -285,7 +283,7 @@ Responsibilities:
 - create run
 - update run status
 - append run events
-- retrieve latest run per report
+- get run by `report_id`
 
 > Phase 1 should stay memory-backed unless persistence becomes necessary.
 
@@ -338,6 +336,46 @@ Responsibilities:
 - map tool names to local callables
 - keep tool descriptions short and precise
 
+### Demo-case hardcoded request mapping (`RPE65 c.260A>G`)
+For the first demo lane, the tool layer can hardcode the stable request inputs instead of trying to infer everything from scratch on every run.
+
+- **ClinVar**
+  - search-once form:
+    - `GET /entrez/eutils/esearch.fcgi?db=clinvar&term=RPE65[gene] AND c.260A>G&retmode=json&retmax=1`
+  - stable fetch for tool use:
+    - `clinvar_id = 1421454`
+    - call `esummary` directly with that id
+
+- **Ensembl VEP**
+  - hardcoded HGVS input:
+    - `NM_000329.3:c.260A>G`
+  - fetch via:
+    - `GET /vep/human/hgvs/NM_000329.3:c.260A>G?content-type=application/json`
+  - canonical filter in tool:
+    - `gene_symbol == RPE65`
+    - `cds_start == 260`
+    - `protein_start == 87`
+
+- **Franklin**
+  - hardcoded search text:
+    - `RPE65:c.260A>G`
+  - optional normalization:
+    - `POST https://franklin.genoox.com/api/parse_search`
+  - interpretation search:
+    - `GET https://api.genoox.com/v2/search/snp/?search_text=RPE65:c.260A%3EG`
+    - requires auth
+
+- **SpliceAI**
+  - use the normalized genomic hg38 form, not the transcript HGVS string
+  - hardcoded request values:
+    - `hg = 38`
+    - `variant = chr1-68444869-T-C`
+    - `distance = 500`
+    - `mask = 0`
+
+Important normalization rule:
+`RPE65` is on the minus strand, so transcript `c.260A>G` maps to genomic `T>C` on GRCh38 for tools like SpliceAI.
+
 ---
 
 ## 6) Rules + workflow
@@ -355,9 +393,6 @@ Responsibilities:
 - map extracted case + evidence -> recommendation band
 - enforce fail-closed behavior when evidence is insufficient
 - compute missing info flags
-
-### `app/rules/lane_overrides.py`
-Reserved for future disease-specific rules.
 
 ### `app/services/intake.py`
 Responsibilities:

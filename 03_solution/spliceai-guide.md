@@ -223,3 +223,40 @@ Unless the lane needs something else:
 - `mask=1` for interpretation-facing outputs
 
 If you want raw exploratory analysis later, use `mask=0` separately.
+
+---
+
+## Demo-case mapping: `RPE65 c.260A>G`
+
+SpliceAI cannot take the transcript HGVS string directly.
+For this demo case, first normalize to the genomic GRCh38 form.
+
+Important:
+- `RPE65` is on the **minus strand**
+- transcript `c.260A>G` becomes genomic `chr1:68444869 T>C`
+
+### Request that matches the desired demo result
+```http
+GET https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg=38&variant=chr1-68444869-T-C&distance=500&mask=0
+```
+
+### Result fields to read
+From `scores[0]`:
+- `DS_AL` -> `0.12` -> Acceptor loss
+- `DS_DL` -> `0.04` -> Donor loss
+- `DS_AG` -> `0.00` -> Acceptor gain
+- `DS_DG` -> `0.00` -> Donor gain
+
+### Important note
+If you use `mask=1` for this case, the donor-loss signal is masked to `0.00`.
+If you send `A>G` instead of genomic `T>C`, you will not get the intended result.
+
+### Tool recommendation for this demo
+For the demo tool, it is reasonable to hardcode:
+
+```text
+hg = 38
+variant = chr1-68444869-T-C
+distance = 500
+mask = 0
+```

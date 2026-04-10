@@ -163,3 +163,42 @@ curl 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=clinvar&id=
 2. Cache responses for demo cases.
 3. Tag all outputs with `source: ClinVar` and `timestamp`.
 4. Never let ClinVar override rule-based referral logic without clinician review.
+
+---
+
+## Demo-case mapping: `RPE65 c.260A>G`
+
+For the current demo case, the clean ClinVar conversion is:
+
+### Search once
+```http
+GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=clinvar&term=RPE65%5Bgene%5D%20AND%20c.260A%3EG&retmode=json&retmax=1
+```
+
+Observed resolution:
+- `idlist[0] = 1421454`
+
+### Stable summary fetch
+```http
+GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=clinvar&id=1421454&retmode=json
+```
+
+### Useful fields for this case
+- `title` -> `NM_000329.3(RPE65):c.260A>G (p.Asp87Gly)`
+- `genes[0].symbol` -> `RPE65`
+- `protein_change` -> `D87G`
+- `obj_type` -> `single nucleotide variant`
+- `molecular_consequence_list[0]` -> `missense variant`
+- `germline_classification.description` -> `Uncertain significance`
+- `germline_classification.trait_set[].trait_name` ->
+  - `Leber congenital amaurosis 2`
+  - `Retinitis pigmentosa 20`
+
+### Tool recommendation for this demo
+For the demo tool, it is reasonable to hardcode:
+
+```text
+clinvar_id = 1421454
+```
+
+and call `esummary` directly, instead of re-searching every time.

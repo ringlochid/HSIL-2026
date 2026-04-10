@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "projectId": "6966097640981800851",
+  "designSystem": {
+    "assetId": "7950292308234b9e9ec2e1ea2ddc4a6e",
+    "displayName": "Helix Obsidian",
+    "jsonPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.json",
+    "mdPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-system.md",
+    "stylePath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/design-style.md",
+    "updatedAt": "2026-04-10T06:10:02.636Z"
+  },
+  "current": {
+    "mobile": {
+      "projectId": "6966097640981800851",
+      "screenId": "ad4ec032f3f54489b8a28ca9c83b1cc3",
+      "deviceType": "MOBILE",
+      "outdir": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile",
+      "metaPath": "/home/ubuntu/leo/projects/HSIL-2026/04_demo/design-work/stitch/mobile/meta.json",
+      "recovery": null,
+      "updatedAt": "2026-04-10T06:10:02.636Z"
+    }
+  },
+  "approved": {},
+  "updatedAt": "2026-04-10T06:10:02.636Z"
+}

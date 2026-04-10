@@ -312,3 +312,45 @@ For this hackathon, Franklin is strongest as:
 - and a **case/workbench source** if access exists.
 
 It should feed a narrower disease/referral decision workflow rather than becoming the whole product.
+
+---
+
+## Demo-case mapping: `RPE65 c.260A>G`
+
+For the current demo case, the clean Franklin conversion is:
+
+### Normalization request
+```http
+POST https://franklin.genoox.com/api/parse_search
+Content-Type: application/json
+
+{
+  "search_text_input": "RPE65:c.260A>G"
+}
+```
+
+Observed parse result:
+- transcript -> `NM_000329`
+- normalized genomic form -> `chr1:68910552 T>C` on `HG19`
+
+### Enrichment request
+```http
+GET https://api.genoox.com/v2/search/snp/?search_text=RPE65:c.260A%3EG
+Authorization: Bearer <FRANKLIN_TOKEN>
+```
+
+Important:
+- the richer Franklin search endpoint requires auth
+- the UI notions of `reference = hg38` and `type = germline` were **not** confirmed here as public query parameters for this endpoint
+- treat those as tool assumptions or post-fetch constraints unless your Franklin tenant exposes a more specific endpoint
+
+### Tool recommendation for this demo
+For the demo tool, it is reasonable to hardcode:
+
+```text
+search_text = RPE65:c.260A>G
+```
+
+and then:
+1. use `parse_search` if you need normalization,
+2. use the authenticated `v2/search/snp` endpoint for interpretation-oriented evidence.
