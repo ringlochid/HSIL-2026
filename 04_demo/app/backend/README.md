@@ -5,7 +5,8 @@ This folder holds the **demo backend**.
 ## Purpose
 
 The backend should do only what the demo needs:
-- intake a case
+- accept a **genetic/genomic report PDF upload**
+- extract usable structured data from that report
 - call tool wrappers / evidence adapters
 - apply narrow decision rules
 - produce a clinician-reviewable draft
@@ -14,9 +15,9 @@ The backend should do only what the demo needs:
 ## Recommended ownership
 
 - `app/api/routes/` — FastAPI endpoints
-- `app/agents/` — optional LangChain `create_agent(...)` wrappers for tool orchestration / explanation
+- `app/agents/` — LangChain `create_agent(...)` layer for report extraction, tool use, and draft wording
 - `app/tools/` — API adapters such as Franklin, Ensembl VEP, ClinVar
-- `app/services/` — orchestration logic / draft assembly
+- `app/services/` — ingestion, workflow, and draft assembly logic
 - `app/rules/` — deterministic disease/referral rules
 - `app/schemas/` — Pydantic request/response models
 - `app/fixtures/` — fixture responses and example payloads
@@ -25,4 +26,8 @@ The backend should do only what the demo needs:
 ## Guardrail
 
 Do not let backend complexity outrun the demo.
-The decision logic should stay readable and mostly deterministic.
+Use LangChain as the standard LLM/tool layer, but keep the decision logic readable and mostly deterministic.
+
+## File-level plan
+
+See `IMPLEMENTATION_PLAN.md` for the full file-by-file backend build plan (including env/settings, requirements, Dockerfile, and docker-compose).

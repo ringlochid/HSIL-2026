@@ -39,8 +39,8 @@ This keeps the demo implementation isolated from the planning docs while still s
 
 ## Primary demo path
 
-1. Open case / scenario
-2. Enter or load structured case inputs
+1. Upload a genetic/genomic report PDF
+2. Review extracted structured fields
 3. Run backend interpretation flow
 4. Show recommendation + evidence + uncertainty
 5. Reviewer edits one field
@@ -50,13 +50,15 @@ This keeps the demo implementation isolated from the planning docs while still s
 
 ### Backend
 - thin FastAPI API
+- report upload + extraction flow
+- LangChain agent layer for extraction and draft wording
 - tool wrappers for Franklin / VEP / ClinVar
 - deterministic decision rules
 - draft rendering
-- optional LangChain agent for orchestration only
 
 ### Frontend
-- case intake screen
+- report upload screen
+- extracted-data review screen
 - evidence/recommendation screen
 - clinician review screen
 - export/final output screen
