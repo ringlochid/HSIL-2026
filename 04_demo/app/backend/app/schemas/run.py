@@ -8,16 +8,16 @@ from pydantic import BaseModel, Field
 
 
 class RunStatus(str, Enum):
-    completed = 'completed'
-    degraded = 'degraded'
-    blocked = 'blocked'
+    completed = "completed"
+    degraded = "degraded"
+    blocked = "blocked"
 
 
 class ReviewStatus(str, Enum):
-    pending_review = 'pending_review'
-    reviewed = 'reviewed'
-    approved = 'approved'
-    dropped = 'dropped'
+    pending_review = "pending_review"
+    reviewed = "reviewed"
+    approved = "approved"
+    dropped = "dropped"
 
 
 class RunRequest(BaseModel):

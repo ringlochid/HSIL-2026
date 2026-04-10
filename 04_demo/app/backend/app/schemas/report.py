@@ -5,14 +5,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ReportKind = Literal['test', 'patient']
-ExtractionStatus = Literal['completed', 'degraded', 'blocked']
+ReportKind = Literal["test", "patient"]
+ExtractionStatus = Literal["completed", "degraded", "blocked"]
 
 
 class ExtractionIssue(BaseModel):
     code: str
     message: str
-    severity: Literal['info', 'warning', 'error'] = 'warning'
+    severity: Literal["info", "warning", "error"] = "warning"
 
 
 class ExtractedVariant(BaseModel):
@@ -28,7 +28,7 @@ class ExtractedCase(BaseModel):
     case_label: str
     report_title: str
     summary: str
-    genome_build: str = 'GRCh38'
+    genome_build: str = "GRCh38"
     variants: list[ExtractedVariant] = Field(default_factory=list)
     issues: list[ExtractionIssue] = Field(default_factory=list)
 
@@ -39,7 +39,7 @@ class UploadedReport(BaseModel):
     content_type: str
     size_bytes: int
     created_at: datetime
-    report_kind: ReportKind = 'test'
+    report_kind: ReportKind = "test"
     source_pdf_path: str
     extraction_status: ExtractionStatus
     extracted_case: ExtractedCase

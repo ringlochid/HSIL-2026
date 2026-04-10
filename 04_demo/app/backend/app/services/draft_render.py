@@ -10,11 +10,11 @@ class DraftRenderService:
 
     def render(self, case_title: str, decision: DecisionOutput) -> DraftPayload:
         payload = {
-            'case_title': case_title,
-            'recommendation': decision.recommendation,
-            'evidence_summary': ' '.join(decision.evidence_lines),
-            'uncertainty': decision.uncertainty,
-            'next_step': decision.next_step,
+            "case_title": case_title,
+            "recommendation": decision.recommendation,
+            "evidence_summary": " ".join(decision.evidence_lines),
+            "uncertainty": decision.uncertainty,
+            "next_step": decision.next_step,
         }
         rewritten = self.draft_chain.invoke(payload) if self.draft_chain is not None else payload
         return DraftPayload.model_validate(rewritten)

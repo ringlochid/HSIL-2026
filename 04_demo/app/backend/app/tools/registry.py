@@ -8,8 +8,8 @@ from app.tools.spliceai import SpliceAiTool
 
 def build_tool_registry(settings):
     return {
-        'clinvar': ClinvarTool(settings),
-        'vep': EnsemblVepTool(settings),
-        'franklin': FranklinTool(settings),
-        'spliceai': SpliceAiTool(settings),
+        "clinvar": ClinvarTool(settings),
+        "vep": EnsemblVepTool(settings),
+        "franklin": FranklinTool(settings),
+        "spliceai": SpliceAiTool(settings),
     }

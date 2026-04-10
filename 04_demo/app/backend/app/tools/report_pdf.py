@@ -14,11 +14,11 @@ class ReportPdfTool:
             reader = PdfReader(str(file_path))
             page_count = len(reader.pages)
             for page in reader.pages:
-                text_parts.append(page.extract_text() or '')
+                text_parts.append(page.extract_text() or "")
         except Exception as exc:  # pragma: no cover - exercised indirectly via upload path
-            warnings.append(f'pdf_parse_failed:{type(exc).__name__}')
+            warnings.append(f"pdf_parse_failed:{type(exc).__name__}")
         return {
-            'text': '\n'.join(part for part in text_parts if part).strip(),
-            'page_count': page_count,
-            'warnings': warnings,
+            "text": "\n".join(part for part in text_parts if part).strip(),
+            "page_count": page_count,
+            "warnings": warnings,
         }

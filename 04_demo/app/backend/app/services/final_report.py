@@ -12,7 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.schemas.draft import ApproveResult, DropResult
-from app.schemas.run import RunStatus, ReviewStatus
+from app.schemas.run import ReviewStatus, RunStatus
 
 
 class FinalReportService:

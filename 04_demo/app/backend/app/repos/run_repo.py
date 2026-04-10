@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-
 from app.core.db import RunRecord, session_scope
 from app.schemas.draft import ApproveResult, DropResult, ReviewResult
-from app.schemas.run import RunResponse, RunStatus, ReviewStatus
+from app.schemas.run import ReviewStatus, RunResponse, RunStatus
 
 
 class RunRepo:
@@ -29,8 +28,8 @@ class RunRepo:
                 report_ids=report_ids,
                 run_status=run_status.value,
                 review_status=ReviewStatus.pending_review.value,
-                report_payload=report_payload.model_dump(mode='json'),
-                evidence=[item.model_dump(mode='json') for item in evidence],
+                report_payload=report_payload.model_dump(mode="json"),
+                evidence=[item.model_dump(mode="json") for item in evidence],
                 warnings=warnings,
                 updated_at=datetime.now(timezone.utc),
             )
@@ -63,8 +62,7 @@ class RunRepo:
             from app.schemas.run import EvidenceSourceSummary, ReportPayload
 
             evidence = [
-                EvidenceSourceSummary.model_validate(item)
-                for item in record.evidence or []
+                EvidenceSourceSummary.model_validate(item) for item in record.evidence or []
             ]
             payload = ReportPayload.model_validate(record.report_payload)
             return RunResponse(
@@ -93,7 +91,7 @@ class RunRepo:
             session.add(record)
             return ReviewResult(
                 run_id=run_id,
-                review_status='reviewed',
+                review_status="reviewed",
                 review_note=review_note,
                 reviewed_at=reviewed_at,
             )
@@ -111,10 +109,10 @@ class RunRepo:
             session.add(record)
             return ApproveResult(
                 run_id=run_id,
-                review_status='approved',
+                review_status="approved",
                 review_note=record.review_note,
                 reviewed_at=record.reviewed_at,
-                download_path=f'/api/v1/runs/{run_id}/pdf',
+                download_path=f"/api/v1/runs/{run_id}/pdf",
             )
 
     def drop(self, run_id: str, drop_note: str | None = None) -> DropResult:
@@ -127,14 +125,14 @@ class RunRepo:
                 note = drop_note.strip()
                 if note:
                     if record.review_note:
-                        record.review_note = f'{record.review_note}\n\n{note}'
+                        record.review_note = f"{record.review_note}\n\n{note}"
                     else:
                         record.review_note = note
             record.updated_at = datetime.now(timezone.utc)
             session.add(record)
             return DropResult(
                 run_id=run_id,
-                review_status='dropped',
+                review_status="dropped",
                 review_note=record.review_note,
                 reviewed_at=record.reviewed_at,
             )

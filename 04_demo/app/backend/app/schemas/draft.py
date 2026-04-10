@@ -25,14 +25,14 @@ class RunDropPayload(BaseModel):
 
 class ReviewResult(BaseModel):
     run_id: str
-    review_status: Literal['reviewed'] = 'reviewed'
+    review_status: Literal["reviewed"] = "reviewed"
     review_note: str
     reviewed_at: datetime
 
 
 class ApproveResult(BaseModel):
     run_id: str
-    review_status: Literal['approved'] = 'approved'
+    review_status: Literal["approved"] = "approved"
     review_note: str | None = None
     reviewed_at: datetime | None = None
     download_path: str
@@ -40,6 +40,6 @@ class ApproveResult(BaseModel):
 
 class DropResult(BaseModel):
     run_id: str
-    review_status: Literal['dropped'] = 'dropped'
+    review_status: Literal["dropped"] = "dropped"
     review_note: str | None = None
     reviewed_at: datetime | None = None

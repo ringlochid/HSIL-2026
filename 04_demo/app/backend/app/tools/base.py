@@ -23,14 +23,14 @@ class ToolError(RuntimeError):
 
 
 class FixtureBackedTool:
-    source: str = 'tool'
-    fixture_name: str = ''
+    source: str = "tool"
+    fixture_name: str = ""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
     def fixture_path(self) -> Path:
-        return self.settings.fixtures_root / 'tools' / self.fixture_name
+        return self.settings.fixtures_root / "tools" / self.fixture_name
 
     def load_fixture(self) -> dict[str, Any]:
         return json.loads(self.fixture_path().read_text())

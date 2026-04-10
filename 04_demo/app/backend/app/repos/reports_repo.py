@@ -9,7 +9,7 @@ class ReportsRepo:
         self.session_factory = session_factory
 
     def save(self, report: UploadedReport) -> UploadedReport:
-        payload = report.model_dump(mode='json')
+        payload = report.model_dump(mode="json")
         with session_scope(self.session_factory) as session:
             record = ReportRecord(
                 report_id=report.report_id,

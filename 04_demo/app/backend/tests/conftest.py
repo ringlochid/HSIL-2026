@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import sys
 from io import BytesIO
 from pathlib import Path
-import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,10 +19,10 @@ from app.main import create_app
 @pytest.fixture()
 def app(tmp_path: Path):
     settings = Settings(
-        upload_dir=tmp_path / 'uploads',
-        final_report_dir=tmp_path / 'final_reports',
+        upload_dir=tmp_path / "uploads",
+        final_report_dir=tmp_path / "final_reports",
         database_url=f"sqlite+pysqlite:///{(tmp_path / 'app.db').as_posix()}",
-        llm_provider='mock',
+        llm_provider="mock",
         use_real_apis=False,
         max_upload_mb=5,
         debug=True,
@@ -40,7 +40,7 @@ def client(app):
 def pdf_bytes() -> bytes:
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer)
-    pdf.drawString(72, 720, 'HSIL demo PDF fixture')
-    pdf.drawString(72, 700, 'RPE65 c.260A>G / p.Asp87Gly')
+    pdf.drawString(72, 720, "HSIL demo PDF fixture")
+    pdf.drawString(72, 700, "RPE65 c.260A>G / p.Asp87Gly")
     pdf.save()
     return buffer.getvalue()

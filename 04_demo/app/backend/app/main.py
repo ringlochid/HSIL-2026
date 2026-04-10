@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.agents.client import build_extraction_chain
 from app.api.routes import build_api_router
 from app.core.config import ensure_runtime_dirs, get_settings
 from app.core.db import build_session_factory
@@ -16,10 +17,8 @@ from app.services.final_report import FinalReportService
 from app.services.intake import IntakeService
 from app.services.recommendation import RecommendationService
 from app.services.workflow import WorkflowService
-from app.tools.report_pdf import ReportPdfTool
-from app.agents.client import build_extraction_chain
 from app.tools.registry import build_tool_registry
-
+from app.tools.report_pdf import ReportPdfTool
 
 logger = get_logger(__name__)
 
@@ -32,7 +31,7 @@ def create_app(settings=None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logger.info('HSIL demo backend ready at %s:%s', settings.host, settings.port)
+        logger.info("HSIL demo backend ready at %s:%s", settings.host, settings.port)
         yield
 
     app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
@@ -40,8 +39,8 @@ def create_app(settings=None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=['*'],
-        allow_headers=['*'],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     reports_repo = ReportsRepo(db_session_factory)
@@ -54,7 +53,9 @@ def create_app(settings=None) -> FastAPI:
     app.state.db_session_factory = db_session_factory
     app.state.reports_repo = reports_repo
     app.state.run_repo = run_repo
-    app.state.intake_service = IntakeService(settings, reports_repo, report_pdf_tool, extraction_chain)
+    app.state.intake_service = IntakeService(
+        settings, reports_repo, report_pdf_tool, extraction_chain
+    )
     app.state.workflow_service = WorkflowService(
         reports_repo=reports_repo,
         run_repo=run_repo,
