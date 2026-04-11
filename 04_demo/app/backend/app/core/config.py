@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     final_report_dir: Path = Path("./data/final_reports")
     max_upload_mb: int = 20
     database_url: str = "sqlite+pysqlite:///./data/app.db"
+    jwt_secret: str = 'dev-insecure-change-me-please-replace'
+    jwt_algorithm: str = 'HS256'
+    jwt_ttl_days: int = 7
 
     llm_provider: str = "mock"
     openai_api_key: str | None = None
