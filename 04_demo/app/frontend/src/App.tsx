@@ -117,14 +117,15 @@ const EDITOR_FIELDS: Array<{
   key: keyof Omit<ReportDraftUpdatePayload, "review_note">;
   label: string;
 }> = [
-  { key: "clinical_phenotype", label: "Clinical Phenotype" },
-  { key: "ai_clinical_summary", label: "Clinical Interpretation Summary" },
-  { key: "expanded_evidence", label: "Evidence Summary" },
-  { key: "acmg_classification", label: "ACMG Classification" },
-  { key: "clinical_integration", label: "Clinical Correlation" },
-  { key: "expected_symptoms", label: "Expected Symptoms" },
-  { key: "recommendations", label: "Recommendations" },
-  { key: "limitations", label: "Limitations" },
+  { key: "patient_context", label: "Patient & Referral Context" },
+  { key: "clinical_phenotype", label: "Relevant Clinical Findings" },
+  { key: "ai_clinical_summary", label: "Genomic Finding Summary" },
+  { key: "expanded_evidence", label: "Evidence Snapshot" },
+  { key: "acmg_classification", label: "Classification Snapshot" },
+  { key: "clinical_integration", label: "Interpretation for This Patient" },
+  { key: "expected_symptoms", label: "Gene-/Disease-Associated Features Reference" },
+  { key: "recommendations", label: "Recommended Next Steps" },
+  { key: "limitations", label: "Limitations & Uncertainty" },
 ];
 
 const surfaceReveal: Variants = {
@@ -140,7 +141,7 @@ export default function App() {
   const [sessionRuns, setSessionRuns] = useState<SessionRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
-  const [reportKind, setReportKind] = useState<ReportKind>("test");
+  const [reportKind] = useState<ReportKind>("test");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("idle");
   const [actionMode, setActionMode] = useState<ActionMode>("idle");
@@ -411,6 +412,7 @@ export default function App() {
     }
 
     setReportDraft({
+      patient_context: activeSession.run.report_payload.patient_context ?? "",
       clinical_phenotype:
         activeSession.run.report_payload.clinical_phenotype ?? "",
       ai_clinical_summary:
@@ -460,6 +462,7 @@ export default function App() {
         [activeSession.run.run_id]: updatedRun.review_note ?? "",
       }));
       setReportDraft({
+        patient_context: updatedRun.report_payload.patient_context ?? "",
         clinical_phenotype: updatedRun.report_payload.clinical_phenotype ?? "",
         ai_clinical_summary:
           updatedRun.report_payload.ai_clinical_summary ?? "",
@@ -1404,10 +1407,10 @@ export default function App() {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-h-[92vh] overflow-hidden p-0">
+        <DialogContent className="h-[min(92vh,960px)] max-h-[92vh] overflow-hidden p-0">
           {activeSession && reportDraft ? (
-            <div className="grid max-h-[92vh] min-h-[760px] grid-cols-1 xl:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
-              <div className="overflow-y-auto border-b border-[color:var(--line)] bg-white/70 px-6 py-6 xl:border-b-0 xl:border-r xl:px-7 xl:py-7">
+            <div className="grid h-full min-h-0 grid-cols-1 xl:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
+              <div className="min-h-0 overflow-y-auto overscroll-contain border-b border-[color:var(--line)] bg-white/70 px-6 py-6 xl:border-b-0 xl:border-r xl:px-7 xl:py-7">
                 <DialogHeader className="pr-14">
                   <DialogTitle>Preview & Edit Report</DialogTitle>
                   <DialogDescription>
@@ -1426,6 +1429,32 @@ export default function App() {
                       label="Review state"
                       value={formatReviewLabel(activeSession.run.review_status)}
                     />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[color:var(--line)] bg-white/60 px-4 py-3">
+                  <p className="max-w-sm text-sm leading-6 text-[color:var(--muted-ink)]">
+                    Saved edits update the run payload used by preview,
+                    approval, and final download.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setEditorOpen(false)}
+                      disabled={actionMode !== "idle"}
+                    >
+                      Close
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={handleSaveDraft}
+                      disabled={actionMode !== "idle"}
+                    >
+                      {actionMode === "saving_draft" ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : null}
+                      Save Draft
+                    </Button>
                   </div>
                 </div>
 
@@ -1481,35 +1510,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--line)] pt-5">
-                    <p className="max-w-sm text-sm leading-6 text-[color:var(--muted-ink)]">
-                      Saved edits update the run payload used by preview,
-                      approval, and final download.
-                    </p>
-                    <div className="flex gap-3">
-                      <Button
-                        variant="ghost"
-                        onClick={() => setEditorOpen(false)}
-                        disabled={actionMode !== "idle"}
-                      >
-                        Close
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={handleSaveDraft}
-                        disabled={actionMode !== "idle"}
-                      >
-                        {actionMode === "saving_draft" ? (
-                          <LoaderCircle className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        Save Draft
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </div>
 
-              <div className="flex min-h-[520px] flex-col bg-[color:var(--wash)]/75">
+              <div className="flex min-h-0 flex-col bg-[color:var(--wash)]/75">
                 <div className="flex items-center justify-between gap-4 border-b border-[color:var(--line)] bg-white/65 px-5 py-4 backdrop-blur-sm">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--muted-ink)]">
@@ -1529,7 +1533,7 @@ export default function App() {
                   </Button>
                 </div>
 
-                <div className="flex-1 p-4 xl:p-5">
+                <div className="min-h-0 flex-1 p-4 xl:p-5">
                   <div className="h-full overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-white shadow-[0_18px_50px_rgba(31,47,56,0.08)]">
                     {previewPdfUrl ? (
                       <object

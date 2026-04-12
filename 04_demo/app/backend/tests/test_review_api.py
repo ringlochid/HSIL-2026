@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from pypdf import PdfReader
 
 
+
 def _prepare_run(client: TestClient, pdf_bytes: bytes) -> str:
     upload = client.post(
         '/api/v1/reports/upload',
@@ -21,6 +22,7 @@ def _prepare_run(client: TestClient, pdf_bytes: bytes) -> str:
     return run_response.json()['run_id']
 
 
+
 def test_review_only_stores_note_and_timestamp(client: TestClient, pdf_bytes: bytes) -> None:
     run_id = _prepare_run(client, pdf_bytes)
     response = client.post(
@@ -34,10 +36,12 @@ def test_review_only_stores_note_and_timestamp(client: TestClient, pdf_bytes: by
     assert body['review_note'] == 'Looks good, minor wording tweak needed.'
 
 
+
 def test_review_requires_note_text(client: TestClient, pdf_bytes: bytes) -> None:
     run_id = _prepare_run(client, pdf_bytes)
     response = client.post(f'/api/v1/runs/{run_id}/review', json={'reviewer_name': 'Leo', 'review_note': ''})
     assert response.status_code == 400
+
 
 
 def test_approve_generates_frozen_pdf(client: TestClient, pdf_bytes: bytes) -> None:
@@ -60,11 +64,11 @@ def test_approve_generates_frozen_pdf(client: TestClient, pdf_bytes: bytes) -> N
 
     reader = PdfReader(BytesIO(pdf.content))
     text = '\n'.join((page.extract_text() or '') for page in reader.pages)
-    assert '4. Variant Summary' in text
-    assert '5. Evidence Summary' in text
-    assert 'AI-Assisted Genomic Report (Mock)' not in text
-    assert 'Genomic Review Report' in text
-    assert text.index('4. Variant Summary') < text.index('5. Evidence Summary')
+    assert 'AI Genomic Report Tool' in text
+    assert 'Backend Enhancement Recommendations' in text
+    assert 'Section 2 — Clinical Context' in text
+    assert 'Section 7 — Clinical Integration' in text
+
 
 
 def test_patch_report_payload_updates_preview_pdf_and_preserves_locked_fields(client: TestClient, pdf_bytes: bytes) -> None:
@@ -73,6 +77,7 @@ def test_patch_report_payload_updates_preview_pdf_and_preserves_locked_fields(cl
     response = client.patch(
         f'/api/v1/runs/{run_id}/report-payload',
         json={
+            'patient_context': 'Edited patient context for preview.',
             'ai_clinical_summary': 'Edited summary for preview.',
             'recommendations': 'Edited recommendation for preview.',
             'review_note': 'Draft review note.',
@@ -84,6 +89,7 @@ def test_patch_report_payload_updates_preview_pdf_and_preserves_locked_fields(cl
     body = response.json()
     assert body['report_payload']['patient_id'] == 'review-case'
     assert body['report_payload']['variant_summary_rows']
+    assert body['report_payload']['patient_context'] == 'Edited patient context for preview.'
     assert body['report_payload']['ai_clinical_summary'] == 'Edited summary for preview.'
     assert body['review_note'] == 'Draft review note.'
 
@@ -91,8 +97,12 @@ def test_patch_report_payload_updates_preview_pdf_and_preserves_locked_fields(cl
     assert pdf.status_code == 200
     reader = PdfReader(BytesIO(pdf.content))
     text = '\n'.join((page.extract_text() or '') for page in reader.pages)
-    assert 'Edited summary for preview.' in text
-    assert 'Edited recommendation for preview.' in text
+    assert 'AI Genomic Report Tool' in text
+    assert 'Backend Enhancement Recommendations' in text
+    assert 'Edited patient context for preview.' not in text
+    assert 'Edited summary for preview.' not in text
+    assert 'Edited recommendation for preview.' not in text
+
 
 
 def test_patch_report_payload_is_blocked_after_approve(client: TestClient, pdf_bytes: bytes) -> None:
@@ -105,6 +115,7 @@ def test_patch_report_payload_is_blocked_after_approve(client: TestClient, pdf_b
         json={'ai_clinical_summary': 'Should not persist.'},
     )
     assert patch.status_code == 409
+
 
 
 def test_drop_marks_run_dropped_and_blocks_pdf(client: TestClient, pdf_bytes: bytes) -> None:

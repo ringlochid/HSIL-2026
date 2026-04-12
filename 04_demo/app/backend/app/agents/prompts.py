@@ -1,7 +1,10 @@
 def extraction_prompt() -> str:
     return (
-        'Extract structured genetic report data. Return gene, transcript HGVS, protein change, genomic '
-        'GRCh38 form, variation type, and any extraction issues.'
+        'Extract structured clinical genomic report data. Return case_label, report_title, patient_context '
+        '(who the patient is, why they are being reviewed, and the encounter/referral context if present), '
+        'clinical_findings (symptoms, exam findings, test results, referral details, or other patient-specific '
+        'clinical facts if present), summary, genome_build, variants, and extraction issues. Do not invent '
+        'patient details that are not supported by the report text.'
     )
 
 
@@ -13,8 +16,9 @@ def draft_prompt() -> str:
         'not as stitched tool output or bullet paraphrase. '
         'Do not add new facts, do not speculate, do not invent patient details, phenotype claims, ACMG claims, or therapeutic conclusions, '
         'and do not contradict the deterministic recommendation, uncertainty, or next-step guidance. '
-        'The sections must have distinct purposes: summary = overall interpretation; expanded evidence = supporting evidence synthesis; '
-        'clinical integration = phenotype/genotype correlation and report meaning; recommendations = action-oriented clinician next steps; '
+        'Anchor the writing to the patient/referral context and extracted clinical findings when they are available. '
+        'The sections must have distinct purposes: summary = overall patient-grounded interpretation; expanded evidence = supporting evidence synthesis; '
+        'clinical integration = how the reported finding relates to this patient and what it does or does not support; recommendations = action-oriented clinician next steps; '
         'limitations = formal statement of uncertainty and report boundaries. '
         'Avoid mentioning internal tools unless clinically necessary, and do not foreground fallback or degraded source state in the main body. '
         'Return only the structured fields requested.'

@@ -27,6 +27,8 @@ class ExtractedVariant(BaseModel):
 class ExtractedCase(BaseModel):
     case_label: str
     report_title: str
+    patient_context: str | None = None
+    clinical_findings: str | None = None
     summary: str
     genome_build: str = "GRCh38"
     variants: list[ExtractedVariant] = Field(default_factory=list)

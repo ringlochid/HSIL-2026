@@ -54,7 +54,11 @@ class SearchIndexService:
                 [variant.gene, variant.transcript_hgvs, variant.protein_change]
             )
 
-        summary_text = report.extracted_case.summary or ""
+        summary_text = self._join_text([
+            report.extracted_case.patient_context,
+            report.extracted_case.clinical_findings,
+            report.extracted_case.summary,
+        ])
         raw_extracted_text = (report.raw_extracted_text or "").strip()
 
         return SearchDocumentWrite(
@@ -96,6 +100,7 @@ class SearchIndexService:
         )
         summary_text = self._join_text(
             [
+                run.report_payload.patient_context,
                 run.report_payload.ai_clinical_summary,
                 run.report_payload.clinical_phenotype,
                 run.report_payload.clinical_integration,

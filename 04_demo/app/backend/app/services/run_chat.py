@@ -89,14 +89,15 @@ class RunChatService:
                 )
             )
 
-        append_doc(run.report_payload.clinical_phenotype, section='Clinical phenotype', source_type='run_section')
-        append_doc(run.report_payload.ai_clinical_summary, section='Clinical interpretation summary', source_type='run_section')
-        append_doc(run.report_payload.expanded_evidence, section='Evidence summary', source_type='run_section')
-        append_doc(run.report_payload.acmg_classification, section='ACMG classification', source_type='run_section')
-        append_doc(run.report_payload.clinical_integration, section='Clinical correlation', source_type='run_section')
+        append_doc(run.report_payload.patient_context, section='Patient and referral context', source_type='run_section')
+        append_doc(run.report_payload.clinical_phenotype, section='Relevant clinical findings', source_type='run_section')
+        append_doc(run.report_payload.ai_clinical_summary, section='Genomic finding summary', source_type='run_section')
+        append_doc(run.report_payload.expanded_evidence, section='Evidence snapshot', source_type='run_section')
+        append_doc(run.report_payload.acmg_classification, section='Classification snapshot', source_type='run_section')
+        append_doc(run.report_payload.clinical_integration, section='Interpretation for this patient', source_type='run_section')
         append_doc(run.report_payload.expected_symptoms, section='Expected symptoms', source_type='run_section')
-        append_doc(run.report_payload.recommendations, section='Recommendations', source_type='run_section')
-        append_doc(run.report_payload.limitations, section='Limitations', source_type='run_section')
+        append_doc(run.report_payload.recommendations, section='Recommended next steps', source_type='run_section')
+        append_doc(run.report_payload.limitations, section='Limitations and uncertainty', source_type='run_section')
         append_doc(run.review_note, section='Clinician review note', source_type='run_section')
 
         if run.report_payload.variant_summary_rows:
@@ -139,6 +140,8 @@ class RunChatService:
 
         for report in reports:
             report_title = report.extracted_case.report_title or report.filename
+            append_doc(report.extracted_case.patient_context, section='Extracted patient context', source_type='report_extract', doc_title=report_title)
+            append_doc(report.extracted_case.clinical_findings, section='Extracted clinical findings', source_type='report_extract', doc_title=report_title)
             append_doc(report.extracted_case.summary, section='Extracted summary', source_type='report_extract', doc_title=report_title)
             if report.extracted_case.variants:
                 variant_text = '\n'.join(
@@ -184,18 +187,36 @@ class RunChatService:
         return '\n\n'.join(parts)
 
     def _build_citations(self, docs: list[Document], cited_ids: list[int], *, grounded: bool) -> list[RunChatCitation]:
-        docs_by_id = {
-            int(doc.metadata['chunk_id']): doc
-            for doc in docs
-            if 'chunk_id' in doc.metadata
-        }
+        docs_by_id: dict[int, Document] = {}
+        docs_by_id_str: dict[str, Document] = {}
+        for doc in docs:
+            chunk_id = doc.metadata.get('chunk_id')
+            if chunk_id is None:
+                continue
+            chunk_key: int | None = None
+            chunk_key_text = str(chunk_id)
+            docs_by_id_str[chunk_key_text] = doc
+            if isinstance(chunk_id, int):
+                chunk_key = chunk_id
+            else:
+                if isinstance(chunk_id, str) and chunk_id.isdigit():
+                    chunk_key = int(chunk_id)
+            if chunk_key is not None:
+                docs_by_id[chunk_key] = doc
+
         chosen_ids = cited_ids
         if grounded and not chosen_ids and docs:
-            chosen_ids = [int(docs[0].metadata['chunk_id'])]
+            fallback_id = docs[0].metadata.get('chunk_id')
+            if isinstance(fallback_id, int):
+                chosen_ids = [fallback_id]
+            elif isinstance(fallback_id, str) and fallback_id.isdigit():
+                chosen_ids = [int(fallback_id)]
 
         citations: list[RunChatCitation] = []
         for chunk_id in chosen_ids:
             doc = docs_by_id.get(chunk_id)
+            if doc is None:
+                doc = docs_by_id_str.get(str(chunk_id))
             if doc is None:
                 continue
             citations.append(
@@ -206,6 +227,18 @@ class RunChatService:
                     section=str(doc.metadata.get('section')) if doc.metadata.get('section') is not None else None,
                 )
             )
+
+        if grounded and not citations and docs:
+            fallback_doc = docs[0]
+            citations.append(
+                RunChatCitation(
+                    title=str(fallback_doc.metadata.get('title', 'Source')),
+                    snippet=self._build_snippet(fallback_doc.page_content),
+                    source_type=str(fallback_doc.metadata.get('source_type', 'run_section')),
+                    section=str(fallback_doc.metadata.get('section')) if fallback_doc.metadata.get('section') is not None else None,
+                )
+            )
+
         return citations
 
     def _build_snippet(self, text: str) -> str:

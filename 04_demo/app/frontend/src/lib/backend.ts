@@ -24,6 +24,8 @@ export interface ExtractedVariant {
 export interface ExtractedCase {
   case_label: string
   report_title: string
+  patient_context?: string | null
+  clinical_findings?: string | null
   summary: string
   genome_build: string
   variants: ExtractedVariant[]
@@ -66,6 +68,7 @@ export interface ReportPayload {
   case_label?: string | null
   report_title?: string | null
   source_filenames?: string[]
+  patient_context?: string | null
   clinical_phenotype: string | null
   ai_clinical_summary: string | null
   variant_summary_rows: VariantSummaryRow[]
@@ -105,6 +108,7 @@ export interface ClinicianReviewPayload {
 }
 
 export interface ReportDraftUpdatePayload {
+  patient_context?: string | null
   clinical_phenotype?: string | null
   ai_clinical_summary?: string | null
   expanded_evidence?: string | null

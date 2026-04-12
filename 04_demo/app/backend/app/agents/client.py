@@ -76,7 +76,9 @@ def build_draft_chain(settings: Settings):
                 (
                     'human',
                     'Case title: {case_title}\n'
+                    'Patient context: {patient_context}\n'
                     'Clinical phenotype: {clinical_phenotype}\n'
+                    'Variant summary: {variant_summary}\n'
                     'Deterministic recommendation: {recommendation}\n'
                     'Evidence lines: {evidence_lines}\n'
                     'Uncertainty: {uncertainty}\n'

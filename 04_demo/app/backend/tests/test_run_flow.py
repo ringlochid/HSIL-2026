@@ -6,6 +6,7 @@ from app.services.draft_render import DraftRenderService
 from app.tools.base import ToolResult
 
 
+
 def _upload_report(client: TestClient, pdf_bytes: bytes, report_kind: str = 'test') -> str:
     response = client.post(
         '/api/v1/reports/upload',
@@ -14,6 +15,7 @@ def _upload_report(client: TestClient, pdf_bytes: bytes, report_kind: str = 'tes
     )
     assert response.status_code == 201
     return response.json()['report']['report_id']
+
 
 
 def test_create_run_with_multiple_reports(client: TestClient, pdf_bytes: bytes) -> None:
@@ -31,7 +33,16 @@ def test_create_run_with_multiple_reports(client: TestClient, pdf_bytes: bytes) 
     assert body['run_status'] == 'completed'
     assert body['review_status'] == 'pending_review'
     assert body['report_payload']['patient_id'] == 'RP-001'
-    assert body['report_payload']['acmg_classification']
+    assert body['report_payload']['case_label'] is None
+    assert body['report_payload']['report_title'] == 'RPE65 variant review demo case'
+    assert body['report_payload']['source_filenames'] == []
+    assert 'Ravi' not in body['report_payload']['patient_context']
+    assert 'patient ID RP-001' in body['report_payload']['patient_context']
+    assert 'The patient attended Ophthalmology clinic' in body['report_payload']['patient_context']
+    assert 'ERG shows' in body['report_payload']['clinical_phenotype']
+    assert 'source snapshot' in body['report_payload']['acmg_classification']
+    assert 'clinician support' in body['report_payload']['recommendations']
+
 
 
 def test_patient_blocked_run_status_is_marked_blocked(client: TestClient, pdf_bytes: bytes) -> None:
@@ -41,6 +52,7 @@ def test_patient_blocked_run_status_is_marked_blocked(client: TestClient, pdf_by
     assert response.json()['run_status'] == 'blocked'
 
 
+
 def test_run_includes_evidence_without_nulls(client: TestClient, pdf_bytes: bytes) -> None:
     report_id = _upload_report(client, pdf_bytes)
     response = client.post('/api/v1/runs', json={'patient_id': 'RP-003', 'report_ids': [report_id]})
@@ -48,6 +60,7 @@ def test_run_includes_evidence_without_nulls(client: TestClient, pdf_bytes: byte
     body = response.json()
     sources = {item['source'] for item in body['evidence']}
     assert sources == {'vep', 'spliceai', 'clinvar', 'franklin'}
+
 
 
 def test_run_surface_degraded_evidence_when_tool_falls_back(client: TestClient, app, pdf_bytes: bytes, monkeypatch) -> None:
@@ -75,6 +88,7 @@ def test_run_surface_degraded_evidence_when_tool_falls_back(client: TestClient, 
     assert any('fallback' in item['status'] for item in body['evidence'])
 
 
+
 def test_run_applies_llm_rewrite_only_to_narrative_fields(client: TestClient, app, pdf_bytes: bytes) -> None:
     report_id = _upload_report(client, pdf_bytes)
 
@@ -94,9 +108,12 @@ def test_run_applies_llm_rewrite_only_to_narrative_fields(client: TestClient, ap
     assert response.status_code == 200
     body = response.json()
 
+    assert body['report_payload']['patient_context'].startswith('This case')
+    assert 'Ravi' not in body['report_payload']['patient_context']
     assert body['report_payload']['ai_clinical_summary'] == 'Rewritten clinical summary for clinician review.'
     assert body['report_payload']['expanded_evidence'] == 'Rewritten evidence narrative preserving source findings.'
     assert body['report_payload']['variant_summary_rows'][0]['gene'] == 'RPE65'
+
 
 
 def test_run_falls_back_cleanly_when_llm_draft_fails(client: TestClient, app, pdf_bytes: bytes) -> None:
@@ -113,5 +130,7 @@ def test_run_falls_back_cleanly_when_llm_draft_fails(client: TestClient, app, pd
     body = response.json()
 
     assert body['run_status'] == 'completed'
-    assert body['report_payload']['ai_clinical_summary'].startswith('Escalate')
+    assert 'RPE65' in body['report_payload']['ai_clinical_summary']
+    assert 'patient-specific interpretation step' in body['report_payload']['ai_clinical_summary']
+    assert 'Ravi' not in body['report_payload']['ai_clinical_summary']
     assert 'llm_draft_fallback:RuntimeError' in body['warnings']

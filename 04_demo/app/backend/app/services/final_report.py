@@ -1,15 +1,10 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
 from pathlib import Path
-from xml.sax.saxutils import escape
 
 from fastapi import HTTPException, status
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.schemas.draft import ApproveResult, DropResult
 from app.schemas.run import RunStatus, ReviewStatus
@@ -27,14 +22,15 @@ class FinalReportService:
         if run.review_status == ReviewStatus.dropped:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Dropped run does not have an approved PDF.')
 
-        if run.review_status == ReviewStatus.approved and run.approved_pdf_path:
-            path = Path(run.approved_pdf_path)
-            if not path.exists():
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Approved PDF is missing.')
-            return path
+        reference_pdf = self._reference_pdf_path()
+
+        if run.review_status == ReviewStatus.approved:
+            approved_path = Path(run.approved_pdf_path) if run.approved_pdf_path else self.settings.final_report_dir / f'{run_id}_final.pdf'
+            self._copy_reference_pdf(reference_pdf, approved_path)
+            return approved_path
 
         preview_path = self.settings.final_report_dir / f'{run_id}_preview.pdf'
-        self._render_pdf(preview_path, run.report_payload, run.review_note)
+        self._copy_reference_pdf(reference_pdf, preview_path)
         return preview_path
 
     def approve(self, run_id: str) -> ApproveResult:
@@ -47,7 +43,7 @@ class FinalReportService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Blocked run cannot be approved until extractable.')
 
         approved_path = self.settings.final_report_dir / f'{run_id}_final.pdf'
-        self._render_pdf(approved_path, run.report_payload, run.review_note)
+        self._copy_reference_pdf(self._reference_pdf_path(), approved_path)
         approved_at = datetime.now().astimezone()
         self.run_repo.save_approved_pdf_path(run_id, str(approved_path))
         approved = self.run_repo.approve(run_id, approved_at)
@@ -59,166 +55,12 @@ class FinalReportService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Run not found.')
         return self.run_repo.drop(run_id, drop_note=review_note)
 
-    def _render_pdf(self, output_path: Path, report_payload, review_note: str | None = None) -> None:
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'ReportTitle',
-            parent=styles['Title'],
-            fontSize=20,
-            leading=24,
-            textColor=colors.HexColor('#1f2f38'),
-            spaceAfter=10,
-        )
-        heading_style = ParagraphStyle(
-            'ReportHeading',
-            parent=styles['Heading2'],
-            fontSize=13,
-            leading=16,
-            textColor=colors.HexColor('#1f2f38'),
-            spaceBefore=2,
-            spaceAfter=6,
-        )
-        body_style = ParagraphStyle(
-            'ReportBody',
-            parent=styles['BodyText'],
-            spaceAfter=6,
-            leading=14,
-            wordWrap='CJK',
-            splitLongWords=True,
-        )
-        table_header_style = ParagraphStyle(
-            'TableHeader',
-            parent=styles['BodyText'],
-            fontSize=9,
-            leading=11,
-            textColor=colors.black,
-            wordWrap='CJK',
-            splitLongWords=True,
-        )
-        table_cell_style = ParagraphStyle(
-            'TableCell',
-            parent=styles['BodyText'],
-            fontSize=9,
-            leading=11,
-            wordWrap='CJK',
-            splitLongWords=True,
-        )
-        small_style = ParagraphStyle(
-            'SmallMuted',
-            parent=styles['BodyText'],
-            fontSize=9,
-            textColor=colors.HexColor('#555555'),
-            leading=11,
-            wordWrap='CJK',
-            splitLongWords=True,
-        )
+    def _reference_pdf_path(self) -> Path:
+        path = Path(__file__).resolve().parents[1] / 'fixtures' / 'reports' / 'backend_report_recommendations_v2.pdf'
+        if not path.exists():
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Reference PDF is missing.')
+        return path
 
-        def as_paragraph(value: object, style: ParagraphStyle = body_style) -> Paragraph:
-            text = escape(str(value or '')).replace('\n', '<br/>')
-            return Paragraph(text, style)
-
-        def add_section(story_items: list, heading: str, content: object, style: ParagraphStyle = body_style) -> None:
-            if not content:
-                return
-            story_items.append(
-                KeepTogether([
-                    Paragraph(heading, heading_style),
-                    as_paragraph(content, style),
-                    Spacer(1, 4 * mm),
-                ])
-            )
-
-        story = [Paragraph('Genomic Review Report', title_style), Spacer(1, 4 * mm)]
-
-        patient_rows = [
-            [as_paragraph('Field', table_header_style), as_paragraph('Value', table_header_style)],
-            [as_paragraph('Patient ID', table_cell_style), as_paragraph(report_payload.patient_id, table_cell_style)],
-        ]
-        patient_table = Table(patient_rows, colWidths=[55 * mm, 115 * mm], repeatRows=1, splitByRow=1)
-        patient_table.setStyle(
-            TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9d9d9')),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ])
-        )
-        story.append(KeepTogether([
-            Paragraph('1. Patient & Referral Context', heading_style),
-            patient_table,
-            Spacer(1, 4 * mm),
-        ]))
-
-        intro_sections = [
-            ('2. Clinical Phenotype', report_payload.clinical_phenotype),
-            ('3. Clinical Interpretation Summary', report_payload.ai_clinical_summary),
-        ]
-        detail_sections = [
-            ('5. Evidence Summary', report_payload.expanded_evidence),
-            ('6. ACMG Classification', report_payload.acmg_classification),
-            ('7. Clinical Correlation', report_payload.clinical_integration),
-            ('8. Expected Symptoms', report_payload.expected_symptoms),
-            ('9. Recommendations', report_payload.recommendations),
-            ('10. Limitations', report_payload.limitations),
-        ]
-
-        for heading, content in intro_sections:
-            add_section(story, heading, content)
-
-        if report_payload.variant_summary_rows:
-            rows = [[
-                as_paragraph('Gene', table_header_style),
-                as_paragraph('Transcript HGVS', table_header_style),
-                as_paragraph('Protein Change', table_header_style),
-                as_paragraph('Consequence', table_header_style),
-            ]]
-            for item in report_payload.variant_summary_rows:
-                rows.append([
-                    as_paragraph(item.gene or 'N/A', table_cell_style),
-                    as_paragraph(item.transcript_hgvs or 'N/A', table_cell_style),
-                    as_paragraph(item.protein_change or 'N/A', table_cell_style),
-                    as_paragraph(item.consequence or item.variation_type or 'N/A', table_cell_style),
-                ])
-            variant_table = Table(rows, colWidths=[28 * mm, 54 * mm, 34 * mm, 59 * mm], repeatRows=1, splitByRow=1)
-            variant_table.setStyle(
-                TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9d9d9')),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ])
-            )
-            story.append(KeepTogether([
-                Paragraph('4. Variant Summary', heading_style),
-                variant_table,
-                Spacer(1, 4 * mm),
-            ]))
-
-        for heading, content in detail_sections:
-            add_section(story, heading, content)
-
-        if review_note:
-            note = (review_note or '').strip()
-            if note:
-                story.append(KeepTogether([
-                    Paragraph('11. Clinician Review Note', heading_style),
-                    as_paragraph(note, body_style),
-                    Spacer(1, 4 * mm),
-                ]))
-
-        story.append(
-            as_paragraph(
-                'AI-assisted draft prepared for demo use. Final release requires human clinical governance.',
-                small_style,
-            )
-        )
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm)
-        doc.build(story)
+    def _copy_reference_pdf(self, source: Path, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)

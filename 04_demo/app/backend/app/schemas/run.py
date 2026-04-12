@@ -47,6 +47,7 @@ class ReportPayload(BaseModel):
     case_label: str | None = None
     report_title: str | None = None
     source_filenames: list[str] = Field(default_factory=list)
+    patient_context: str | None = None
     clinical_phenotype: str | None = None
     ai_clinical_summary: str | None = None
     variant_summary_rows: list[VariantSummaryRow] = Field(default_factory=list)

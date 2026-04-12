@@ -37,6 +37,7 @@ def build_decision() -> DecisionOutput:
 def build_base_payload() -> ReportPayload:
     return ReportPayload(
         patient_id='RP-001',
+        patient_context='Ravi is being reviewed in the inherited retinal disease pathway.',
         clinical_phenotype='Inherited retinal disease review case.',
         ai_clinical_summary='Deterministic summary.',
         variant_summary_rows=[],
@@ -54,7 +55,9 @@ def test_draft_render_rewrites_narrative_fields_when_chain_is_valid() -> None:
 
     drafted, warnings = service.render(
         case_title='RPE65 demo case',
+        patient_context='Ravi is being reviewed in the inherited retinal disease pathway.',
         clinical_phenotype='Inherited retinal disease review case.',
+        variant_summary='RPE65 NM_000329.3:c.260A>G (p.Asp87Gly), missense variant',
         decision=build_decision(),
         evidence_statuses={'vep': 'live'},
         warnings=[],
@@ -66,12 +69,15 @@ def test_draft_render_rewrites_narrative_fields_when_chain_is_valid() -> None:
     assert drafted.recommendations.startswith('Proceed with specialist review')
 
 
+
 def test_draft_render_returns_deterministic_fields_when_chain_is_missing() -> None:
     service = DraftRenderService(None)
 
     drafted, warnings = service.render(
         case_title='RPE65 demo case',
+        patient_context='Ravi is being reviewed in the inherited retinal disease pathway.',
         clinical_phenotype='Inherited retinal disease review case.',
+        variant_summary='RPE65 NM_000329.3:c.260A>G (p.Asp87Gly), missense variant',
         decision=build_decision(),
         evidence_statuses={'vep': 'live'},
         warnings=[],
@@ -83,12 +89,15 @@ def test_draft_render_returns_deterministic_fields_when_chain_is_missing() -> No
     assert drafted.expanded_evidence == 'Deterministic evidence summary.'
 
 
+
 def test_draft_render_falls_back_when_chain_returns_invalid_output() -> None:
     service = DraftRenderService(InvalidDraftChain())
 
     drafted, warnings = service.render(
         case_title='RPE65 demo case',
+        patient_context='Ravi is being reviewed in the inherited retinal disease pathway.',
         clinical_phenotype='Inherited retinal disease review case.',
+        variant_summary='RPE65 NM_000329.3:c.260A>G (p.Asp87Gly), missense variant',
         decision=build_decision(),
         evidence_statuses={'vep': 'live'},
         warnings=[],

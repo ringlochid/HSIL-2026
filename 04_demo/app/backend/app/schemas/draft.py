@@ -24,6 +24,7 @@ class RunDropPayload(BaseModel):
 
 
 class ReportDraftUpdatePayload(BaseModel):
+    patient_context: str | None = None
     clinical_phenotype: str | None = None
     ai_clinical_summary: str | None = None
     expanded_evidence: str | None = None

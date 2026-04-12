@@ -15,7 +15,9 @@ class DraftRenderService:
         self,
         *,
         case_title: str,
+        patient_context: str | None,
         clinical_phenotype: str | None,
+        variant_summary: str,
         decision: DecisionOutput,
         evidence_statuses: dict[str, str],
         warnings: list[str],
@@ -33,7 +35,9 @@ class DraftRenderService:
 
         payload = {
             'case_title': case_title,
+            'patient_context': patient_context or '',
             'clinical_phenotype': clinical_phenotype or '',
+            'variant_summary': variant_summary,
             'recommendation': decision.recommendation,
             'evidence_lines': json.dumps(decision.evidence_lines),
             'uncertainty': decision.uncertainty,
